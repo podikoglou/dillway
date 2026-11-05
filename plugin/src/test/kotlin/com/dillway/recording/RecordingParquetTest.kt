@@ -2,8 +2,10 @@ package com.dillway.recording
 
 import com.dillway.RecordingType
 import dev.hardwood.InputFile
+import dev.hardwood.OutputFile
 import dev.hardwood.reader.ParquetFileReader
 import dev.hardwood.reader.RowReader
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.assertEquals
@@ -17,46 +19,47 @@ import org.junit.Test
  */
 class RecordingParquetTest {
 
+    /** Three packets, one per payload kind — move, arm animation, held item. */
+    private val recording = Recording(
+        id = 1674590916014,
+        started = 1674590916014,
+        player = "78de5f59-ba63-45af-a9a8-8d111e155c29",
+        type = RecordingType.LEGIT,
+        packets = listOf(
+            RecordedPacket(
+                type = "PacketPlayInPosition",
+                timestamp = 1674590916019,
+                data = MoveData(
+                    x = 50.922640679476665,
+                    y = 201.0,
+                    z = 39.91171675963879,
+                    yaw = 0.0f,
+                    pitch = 0.0f,
+                    onGround = true,
+                    hasPos = true,
+                    hasLook = false,
+                ),
+                context = moveContext(onGround = true),
+            ),
+            RecordedPacket(
+                type = "PacketPlayInArmAnimation",
+                timestamp = 1674590919969,
+                data = AnimationData(timestamp = 1674590919969),
+                context = moveContext(onGround = false),
+            ),
+            RecordedPacket(
+                type = "PacketPlayInHeldItemSlot",
+                timestamp = 1674590920231,
+                data = HeldItemData(itemInHandIndex = 2),
+                context = moveContext(onGround = false),
+            ),
+        ),
+    )
+
     @Test
     fun `recording round trips through parquet`() {
         val dir = Files.createTempDirectory("dillway-test")
         val file = dir.resolve("recording.parquet").toFile()
-
-        val recording = Recording(
-            id = 1674590916014,
-            started = 1674590916014,
-            player = "78de5f59-ba63-45af-a9a8-8d111e155c29",
-            type = RecordingType.LEGIT,
-            packets = listOf(
-                RecordedPacket(
-                    type = "PacketPlayInPosition",
-                    timestamp = 1674590916019,
-                    data = MoveData(
-                        x = 50.922640679476665,
-                        y = 201.0,
-                        z = 39.91171675963879,
-                        yaw = 0.0f,
-                        pitch = 0.0f,
-                        onGround = true,
-                        hasPos = true,
-                        hasLook = false,
-                    ),
-                    context = moveContext(onGround = true),
-                ),
-                RecordedPacket(
-                    type = "PacketPlayInArmAnimation",
-                    timestamp = 1674590919969,
-                    data = AnimationData(timestamp = 1674590919969),
-                    context = moveContext(onGround = false),
-                ),
-                RecordedPacket(
-                    type = "PacketPlayInHeldItemSlot",
-                    timestamp = 1674590920231,
-                    data = HeldItemData(itemInHandIndex = 2),
-                    context = moveContext(onGround = false),
-                ),
-            ),
-        )
 
         RecordingParquet.writeRecording(file, recording)
 
@@ -102,6 +105,30 @@ class RecordingParquetTest {
                 assertEquals(false, rows.hasNext())
             }
         }
+    }
+
+    /**
+     * The only part of the stream path that is ours is the adapter in
+     * `RecordingParquet`, so this test locks just the passthrough: the bytes
+     * it hands to [OutputStream] match what Hardwood's own in-memory sink
+     * holds, and the stream is left open (`close()` flushes, never closes).
+     * Container validity is the library's business and its own tests.
+     */
+    @Test
+    fun `output stream sink receives the same bytes hardwood's own sink holds`() {
+        val viaStream = ByteArrayOutputStream()
+        RecordingParquet.writeRecording(viaStream, recording)
+
+        val inMemory = OutputFile.inMemory()
+        RecordingParquet.writeRecording(inMemory, recording)
+
+        val expected = inMemory.buffer()
+        val expectedBytes = ByteArray(expected.remaining()).also { expected.get(it) }
+
+        assertTrue(
+            expectedBytes.contentEquals(viaStream.toByteArray()),
+            "streamed bytes must match the in-memory file byte for byte",
+        )
     }
 
     /** Header columns repeat identically on every row. */

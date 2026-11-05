@@ -1,0 +1,16 @@
+# Recording storage. Recordings are always written to the plugin data folder
+# first (plugins/Dillway/<type>/<started>.parquet); with the upload enabled
+# each finished recording is then pushed to the bucket right away and the
+# local copy is removed once the upload succeeds.
+
+s3:
+  enabled: false
+  endpoint: "https://<account-id>.r2.cloudflarestorage.com"
+  # R2 serves the S3 API in path style (<endpoint>/<bucket>/<key>).
+  path-style: true
+  bucket: "dillway-recordings"
+  access-key-id: ""
+  secret-access-key: ""
+  # Object keys are <key-prefix>/<type>/<started>.parquet, with the recording
+  # type grouping legit and speed sessions. Empty prefix drops the level.
+  key-prefix: "recordings"

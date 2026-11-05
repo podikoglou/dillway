@@ -194,6 +194,7 @@ class DillListener(private val plugin: DillPlugin) : Listener {
                 "Saved ${session.type} recording for ${player.name} → ${file.name} " +
                     "(${session.packets.size} packets)",
             )
+            plugin.uploader.upload(file, session.type, file.name)
         } catch (e: IOException) {
             plugin.logger.severe("Failed to save recording: ${e.message}")
         }

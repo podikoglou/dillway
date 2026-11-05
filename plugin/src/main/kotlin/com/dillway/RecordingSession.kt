@@ -1,5 +1,6 @@
 package com.dillway
 
+import com.dillway.recording.RecordedPacket
 import java.util.UUID
 
 /** Holds the in-progress state of one player recording. */
@@ -8,6 +9,5 @@ class RecordingSession(
     val type: RecordingType,
     val started: Long = System.currentTimeMillis(),
 ) {
-    // Entries are untyped lookup maps until the typed recording model lands.
-    val packets: MutableList<Map<String, Any>> = mutableListOf()
+    val packets: MutableList<RecordedPacket> = mutableListOf()
 }

@@ -13,12 +13,15 @@ repositories {
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
-    compileOnly("com.google.code.gson:gson:2.11.0") // Paper provides Gson at runtime
 
     implementation("io.github.vaperion.blade:paper:1.1.9")
 
+    // Parquet writer with no Hadoop/Avro tree. zstd-jni enables the writer's
+    // ZSTD codec; without it Hardwood falls back to UNCOMPRESSED pages.
+    implementation("dev.hardwood:hardwood-core:1.1.0.Beta3")
+    implementation("com.github.luben:zstd-jni:1.5.7-3")
+
     testImplementation(kotlin("test"))
-    testImplementation("com.google.code.gson:gson:2.11.0")
 }
 
 kotlin {

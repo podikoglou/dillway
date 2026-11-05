@@ -5,6 +5,8 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import java.util.Locale;
+
 public class DillCommand implements CommandExecutor {
 
     private final DillListener listener;
@@ -35,7 +37,11 @@ public class DillCommand implements CommandExecutor {
 
         switch (sub) {
             case "rec" -> {
-                String type = args.length >= 3 ? args[2].toUpperCase() : "LEGIT";
+                if (args.length < 3) {
+                    sender.sendMessage("§cUsage: §f/dill rec <player> <LEGIT|SPEED>");
+                    return true;
+                }
+                String type = args[2].toUpperCase(Locale.ROOT);
                 if (listener.startRecording(target, type)) {
                     sender.sendMessage("§a▶ Recording §e" + target.getName() + " §aas §b" + type);
                 } else {
@@ -56,7 +62,7 @@ public class DillCommand implements CommandExecutor {
     }
 
     private void sendUsage(CommandSender sender) {
-        sender.sendMessage("§eUsage: §f/dill rec <player> §7[LEGIT|SPEED]");
+        sender.sendMessage("§eUsage: §f/dill rec <player> <LEGIT|SPEED>");
         sender.sendMessage("§eUsage: §f/dill stop <player>");
     }
 }

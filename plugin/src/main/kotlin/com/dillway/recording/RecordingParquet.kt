@@ -7,6 +7,8 @@ import dev.hardwood.metadata.RepetitionType
 import dev.hardwood.schema.FileSchema
 import dev.hardwood.writer.ParquetFileWriter
 import java.io.File
+import java.io.OutputStream
+import java.nio.ByteBuffer
 
 /**
  * Writes recordings as Parquet with the flat, one-row-per-packet layout.
@@ -92,11 +94,16 @@ object RecordingParquet {
         .build()
 
     /**
-     * Writes one recording to [file]. The file holds one row per packet; the
-     * context columns carry the context captured with that packet.
+     * Writes one recording to a Parquet sink. The output holds one row per
+     * packet; the context columns carry the context captured with that packet.
+     *
+     * Hardwood's [OutputFile] is the destination abstraction — the write-side
+     * equivalent of a Rust-style `Write` trait — so a recording can go to a
+     * file, memory, or any byte transport. Callers that want a plain stream
+     * use the [OutputStream] overload.
      */
-    fun writeRecording(file: File, recording: Recording) {
-        ParquetFileWriter.create(OutputFile.of(file.toPath()), schema).use { writer ->
+    fun writeRecording(destination: OutputFile, recording: Recording) {
+        ParquetFileWriter.create(destination, schema).use { writer ->
             val rows = writer.rowWriter()
             for (packet in recording.packets) {
                 rows.writeRow { row ->
@@ -156,5 +163,75 @@ object RecordingParquet {
                 }
             }
         }
+    }
+
+    /**
+     * Writes one recording to [file]. Writes go to a temporary sibling and are
+     * renamed onto the target when the writer closes, so a failed write leaves
+     * the previous file at the target untouched.
+     */
+    fun writeRecording(file: File, recording: Recording) =
+        writeRecording(OutputFile.of(file.toPath()), recording)
+
+    /**
+     * Writes one recording into [output]. The stream is flushed, not closed —
+     * lifetime stays with the caller. A failed write leaves bytes behind in
+     * the stream; every Parquet file ends with its footer, so the recipient
+     * read must fail and treat the recording as unusable.
+     */
+    fun writeRecording(output: OutputStream, recording: Recording) =
+        writeRecording(OutputStreamOutputFile(output), recording)
+}
+
+/**
+ * Turns any [OutputStream] into a Hardwood [OutputFile] sink. Hardwood produces
+ * the container front to back and never seeks backward, so a stream is enough.
+ *
+ * Writes are synchronized: the writer copies column chunks and flushes pages
+ * from several of its own threads, and [OutputStream] itself is not
+ * thread-safe.
+ */
+private class OutputStreamOutputFile(private val output: OutputStream) : OutputFile {
+
+    /** Bytes handed to the stream so far, per the [OutputFile.position] contract. */
+    @Volatile
+    private var position: Long = 0
+
+    override fun create() {
+        // Nothing to acquire — the caller owns the stream.
+    }
+
+    override fun write(data: ByteBuffer) {
+        val length = data.remaining()
+        if (length == 0) return
+        synchronized(output) {
+            // The buffer may be direct, with no backing array, or carry an
+            // offset. Copy through a heap chunk and drain it fully: the
+            // contract consumes the buffer.
+            val chunk = ByteArray(minOf(length, CHUNK_BYTES))
+            while (data.hasRemaining()) {
+                val take = minOf(data.remaining(), chunk.size)
+                data.get(chunk, 0, take)
+                output.write(chunk, 0, take)
+            }
+            position += length
+        }
+    }
+
+    override fun position(): Long = position
+
+    override fun close() {
+        synchronized(output) { output.flush() }
+    }
+
+    override fun discard() {
+        // The bytes already reached the stream and cannot be unwritten. The
+        // writer only calls this when the file is invalid, and the missing
+        // footer makes that visible to any reader.
+    }
+
+    private companion object {
+        /** Drain in 64 KiB pieces; Hardwood hands over page-sized buffers. */
+        private const val CHUNK_BYTES = 64 * 1024
     }
 }

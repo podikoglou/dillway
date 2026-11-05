@@ -6,7 +6,7 @@ import com.dillway.recording.MoveData
 import com.dillway.recording.PlayerContext
 import com.dillway.recording.RecordedPacket
 import com.dillway.recording.Recording
-import com.dillway.recording.RecordingJson
+import com.dillway.recording.RecordingParquet
 import org.bukkit.Location
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
@@ -178,7 +178,7 @@ class DillListener(private val plugin: DillPlugin) : Listener {
 
     private fun saveSession(player: Player, session: RecordingSession) {
         val dir = File(plugin.dataFolder, session.type.folder).apply { mkdirs() }
-        val file = File(dir, "${session.started}.json")
+        val file = File(dir, "${session.started}.parquet")
 
         val recording = Recording(
             id = session.started,
@@ -189,7 +189,7 @@ class DillListener(private val plugin: DillPlugin) : Listener {
         )
 
         try {
-            file.bufferedWriter().use { RecordingJson.gson.toJson(recording, it) }
+            RecordingParquet.writeRecording(file, recording)
             plugin.logger.info(
                 "Saved ${session.type} recording for ${player.name} → ${file.name} " +
                     "(${session.packets.size} packets)",

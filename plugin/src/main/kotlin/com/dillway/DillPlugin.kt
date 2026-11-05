@@ -7,13 +7,20 @@ import java.io.File
 
 class DillPlugin : JavaPlugin() {
 
-    // Eager field: set before onEnable, so onDisable is always safe.
+    // Eager fields: set before onEnable, so onDisable is always safe.
     private val listener = DillListener(this)
+    val uploader = S3Uploader(this)
 
     override fun onEnable() {
+        saveDefaultConfig()
+
         // Ensure one output directory per recording type
         RecordingType.entries.forEach { type ->
             File(dataFolder, type.folder).mkdirs()
+        }
+
+        if (uploader.start()) {
+            logger.info("Uploading recordings to s3://${config.getString("s3.bucket")}")
         }
 
         server.pluginManager.registerEvents(listener, this)
@@ -27,6 +34,8 @@ class DillPlugin : JavaPlugin() {
     }
 
     override fun onDisable() {
-        listener.stopAll() // flush any in-flight recordings
+        // Sessions flush (and upload) before the uploader's client closes.
+        listener.stopAll()
+        uploader.stop()
     }
 }

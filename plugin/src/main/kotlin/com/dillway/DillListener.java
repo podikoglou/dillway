@@ -33,7 +33,8 @@ public class DillListener implements Listener {
 
     public boolean startRecording(Player player, RecordingType type) {
         if (sessions.containsKey(player.getUniqueId())) return false;
-        sessions.put(player.getUniqueId(), new RecordingSession(player.getUniqueId(), type));
+        sessions.put(player.getUniqueId(),
+                new RecordingSession(player.getUniqueId(), type, System.currentTimeMillis()));
         return true;
     }
 
@@ -96,7 +97,7 @@ public class DillListener implements Listener {
         data.put("hasLook",  lookChanged);
 
         // context is captured at the time of the packet (from = server's current state)
-        session.packets.add(buildEntry(packetType, player, from, data));
+        session.getPackets().add(buildEntry(packetType, player, from, data));
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -108,7 +109,7 @@ public class DillListener implements Listener {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("timestamp", System.currentTimeMillis());
 
-        session.packets.add(buildEntry("PacketPlayInArmAnimation", player, player.getLocation(), data));
+        session.getPackets().add(buildEntry("PacketPlayInArmAnimation", player, player.getLocation(), data));
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -120,7 +121,7 @@ public class DillListener implements Listener {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("itemInHandIndex", event.getNewSlot());
 
-        session.packets.add(buildEntry("PacketPlayInHeldItemSlot", player, player.getLocation(), data));
+        session.getPackets().add(buildEntry("PacketPlayInHeldItemSlot", player, player.getLocation(), data));
     }
 
     // -------------------------------------------------------------------------
@@ -177,22 +178,22 @@ public class DillListener implements Listener {
 
     private void saveSession(Player player, RecordingSession session) {
         Map<String, Object> output = new LinkedHashMap<>();
-        output.put("id",      session.started);
-        output.put("started", session.started);
-        output.put("player",  session.playerId.toString());
-        output.put("type",    session.type);
-        output.put("packets", session.packets);
+        output.put("id",      session.getStarted());
+        output.put("started", session.getStarted());
+        output.put("player",  session.getPlayerId().toString());
+        output.put("type",    session.getType());
+        output.put("packets", session.getPackets());
 
         // Route into the subfolder named by the label
-        File dir = new File(plugin.getDataFolder(), session.type.folder());
+        File dir = new File(plugin.getDataFolder(), session.getType().getFolder());
         dir.mkdirs();
-        File file = new File(dir, session.started + ".json");
+        File file = new File(dir, session.getStarted() + ".json");
 
         try (FileWriter writer = new FileWriter(file)) {
             gson.toJson(output, writer);
             plugin.getLogger().info(
-                "Saved " + session.type + " recording for " + player.getName() +
-                " → " + file.getName() + " (" + session.packets.size() + " packets)"
+                "Saved " + session.getType() + " recording for " + player.getName() +
+                " → " + file.getName() + " (" + session.getPackets().size() + " packets)"
             );
         } catch (IOException e) {
             plugin.getLogger().severe("Failed to save recording: " + e.getMessage());

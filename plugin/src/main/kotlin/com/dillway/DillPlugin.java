@@ -14,7 +14,7 @@ public class DillPlugin extends JavaPlugin {
     public void onEnable() {
         // Ensure one output directory per recording type
         for (RecordingType type : RecordingType.values()) {
-            new File(getDataFolder(), type.folder()).mkdirs();
+            new File(getDataFolder(), type.getFolder()).mkdirs();
         }
 
         listener = new DillListener(this);

@@ -25,8 +25,6 @@ public class DillPlugin extends JavaPlugin {
                 "§cYou don't have permission to use this command."))
             .build()
             .register(new DillCommand(listener));
-
-        getLogger().info("Dillway ready. Use /dill rec <player> <LEGIT|SPEED>");
     }
 
     @Override

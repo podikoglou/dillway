@@ -4,12 +4,6 @@ main: com.dillway.DillPlugin
 api-version: '1.21'
 description: Records player movement packets for ML training data
 
-commands:
-  dill:
-    description: Start or stop recording a player
-    usage: /dill <rec|stop> <player> [type]
-    permission: dillway.admin
-
 permissions:
   dillway.admin:
     description: Access to /dill commands

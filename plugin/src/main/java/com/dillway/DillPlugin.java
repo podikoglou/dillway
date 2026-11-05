@@ -1,5 +1,7 @@
 package com.dillway;
 
+import me.vaperion.blade.Blade;
+import me.vaperion.blade.paper.BladePaperPlatform;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -10,16 +12,21 @@ public class DillPlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        // Ensure output directories exist alongside the plugin data folder
-        new File(getDataFolder(), "legit").mkdirs();
-        new File(getDataFolder(), "speed").mkdirs();
-        new File(getDataFolder(), "recordings").mkdirs();
+        // Ensure one output directory per recording type
+        for (RecordingType type : RecordingType.values()) {
+            new File(getDataFolder(), type.folder()).mkdirs();
+        }
 
         listener = new DillListener(this);
         getServer().getPluginManager().registerEvents(listener, this);
-        getCommand("dill").setExecutor(new DillCommand(listener));
 
-        getLogger().info("Dillway ready. Use /dill rec <player> [LEGIT|SPEED]");
+        Blade.forPlatform(new BladePaperPlatform(this))
+            .config(cfg -> cfg.defaultPermissionMessage(
+                "§cYou don't have permission to use this command."))
+            .build()
+            .register(new DillCommand(listener));
+
+        getLogger().info("Dillway ready. Use /dill rec <player> <LEGIT|SPEED>");
     }
 
     @Override

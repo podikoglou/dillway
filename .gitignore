@@ -1,2 +1,10 @@
-# Java build output
-plugin/target/
+# Gradle build output
+plugin/.gradle/
+plugin/build/
+
+# IDE metadata
+.project
+.classpath
+.settings/
+.idea/
+*.iml

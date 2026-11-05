@@ -1,0 +1,160 @@
+package com.dillway.recording
+
+import dev.hardwood.OutputFile
+import dev.hardwood.metadata.LogicalType
+import dev.hardwood.metadata.PhysicalType
+import dev.hardwood.metadata.RepetitionType
+import dev.hardwood.schema.FileSchema
+import dev.hardwood.writer.ParquetFileWriter
+import java.io.File
+
+/**
+ * Writes recordings as Parquet with the flat, one-row-per-packet layout.
+ *
+ * The JSON format nested packets under the recording; a columnar file flattens
+ * them, so the recording header columns repeat on every row. Collisions the
+ * flattening creates are resolved with unambiguous names:
+ *
+ * - `type` on the recording → `recording_type`; `type` on the packet →
+ *   `packet_type`.
+ * - `timestamp` inside `AnimationData` → `animation_timestamp`; the packet's
+ *   top-level timestamp stays `timestamp` (it is the one feature extraction
+ *   reads).
+ *
+ * Every other key keeps its legacy JSON name (`player`, `x`, `yaw`, `f`,
+ * `hasPos`, `itemInHandIndex`, the snake_case context fields), so the Python
+ * side keeps working without renaming.
+ *
+ * A per-packet payload (`move`, animation, held-item) is `OPTIONAL` — present
+ * only on the packets that carry it. `PlayerContext` is captured on every
+ * packet, so its columns are `REQUIRED`.
+ */
+object RecordingParquet {
+
+    val schema: FileSchema = FileSchema.builder("recording")
+        // Recording header, repeated on every packet row.
+        .addColumn("id", PhysicalType.INT64, RepetitionType.REQUIRED)
+        .addColumn("started", PhysicalType.INT64, RepetitionType.REQUIRED)
+        .addColumn("player", PhysicalType.BYTE_ARRAY, RepetitionType.REQUIRED, LogicalType.string())
+        .addColumn("recording_type", PhysicalType.BYTE_ARRAY, RepetitionType.REQUIRED, LogicalType.string())
+        // Packet row.
+        .addColumn("packet_type", PhysicalType.BYTE_ARRAY, RepetitionType.REQUIRED, LogicalType.string())
+        .addColumn("timestamp", PhysicalType.INT64, RepetitionType.REQUIRED)
+        // Move payload (position / position / look packets only).
+        .addColumn("x", PhysicalType.DOUBLE, RepetitionType.OPTIONAL)
+        .addColumn("y", PhysicalType.DOUBLE, RepetitionType.OPTIONAL)
+        .addColumn("z", PhysicalType.DOUBLE, RepetitionType.OPTIONAL)
+        // Location stores yaw and pitch as float. Keep them as float; widening
+        // to double would capture the float's 0.1 artifacts instead of the player
+        // state as the JVM reports it.
+        .addColumn("yaw", PhysicalType.FLOAT, RepetitionType.OPTIONAL)
+        .addColumn("pitch", PhysicalType.FLOAT, RepetitionType.OPTIONAL)
+        // Legacy key names: the client-reported ground flag and the
+        // position/look change markers.
+        .addColumn("f", PhysicalType.BOOLEAN, RepetitionType.OPTIONAL)
+        .addColumn("hasPos", PhysicalType.BOOLEAN, RepetitionType.OPTIONAL)
+        .addColumn("hasLook", PhysicalType.BOOLEAN, RepetitionType.OPTIONAL)
+        // Animation payload (arm-animation packets only).
+        .addColumn("animation_timestamp", PhysicalType.INT64, RepetitionType.OPTIONAL)
+        // Held-item payload (held-item-slot packets only).
+        .addColumn("itemInHandIndex", PhysicalType.INT32, RepetitionType.OPTIONAL)
+        // PlayerContext, captured at the time of the packet.
+        .addColumn("fly_speed", PhysicalType.FLOAT, RepetitionType.REQUIRED)
+        .addColumn("velocity_z", PhysicalType.DOUBLE, RepetitionType.REQUIRED)
+        .addColumn("location_x", PhysicalType.DOUBLE, RepetitionType.REQUIRED)
+        .addColumn("location_y", PhysicalType.DOUBLE, RepetitionType.REQUIRED)
+        .addColumn("location_direction_y", PhysicalType.DOUBLE, RepetitionType.REQUIRED)
+        .addColumn("location_direction_x", PhysicalType.DOUBLE, RepetitionType.REQUIRED)
+        .addColumn("velocity_x", PhysicalType.DOUBLE, RepetitionType.REQUIRED)
+        .addColumn("velocity_y", PhysicalType.DOUBLE, RepetitionType.REQUIRED)
+        .addColumn("saturation", PhysicalType.FLOAT, RepetitionType.REQUIRED)
+        .addColumn("location_direction_z", PhysicalType.DOUBLE, RepetitionType.REQUIRED)
+        .addColumn("location_z", PhysicalType.DOUBLE, RepetitionType.REQUIRED)
+        .addColumn("food_level", PhysicalType.INT32, RepetitionType.REQUIRED)
+        .addColumn("eye_location_yaw", PhysicalType.FLOAT, RepetitionType.REQUIRED)
+        .addColumn("walk_speed", PhysicalType.FLOAT, RepetitionType.REQUIRED)
+        .addColumn("eye_height", PhysicalType.DOUBLE, RepetitionType.REQUIRED)
+        .addColumn("allow_flight", PhysicalType.BOOLEAN, RepetitionType.REQUIRED)
+        .addColumn("exhaustion", PhysicalType.FLOAT, RepetitionType.REQUIRED)
+        .addColumn("health", PhysicalType.DOUBLE, RepetitionType.REQUIRED)
+        .addColumn("eye_location_pitch", PhysicalType.FLOAT, RepetitionType.REQUIRED)
+        .addColumn("location_pitch", PhysicalType.FLOAT, RepetitionType.REQUIRED)
+        .addColumn("fall_distance", PhysicalType.FLOAT, RepetitionType.REQUIRED)
+        .addColumn("location_yaw", PhysicalType.FLOAT, RepetitionType.REQUIRED)
+        .addColumn("health_scale", PhysicalType.DOUBLE, RepetitionType.REQUIRED)
+        .addColumn("sprinting", PhysicalType.BOOLEAN, RepetitionType.REQUIRED)
+        .addColumn("eye_location_y", PhysicalType.DOUBLE, RepetitionType.REQUIRED)
+        .addColumn("eye_location_x", PhysicalType.DOUBLE, RepetitionType.REQUIRED)
+        .addColumn("flying", PhysicalType.BOOLEAN, RepetitionType.REQUIRED)
+        .addColumn("eye_location_z", PhysicalType.DOUBLE, RepetitionType.REQUIRED)
+        .addColumn("sneaking", PhysicalType.BOOLEAN, RepetitionType.REQUIRED)
+        .addColumn("on_ground", PhysicalType.BOOLEAN, RepetitionType.REQUIRED)
+        .build()
+
+    /**
+     * Writes one recording to [file]. The file holds one row per packet; the
+     * context columns carry the context captured with that packet.
+     */
+    fun writeRecording(file: File, recording: Recording) {
+        ParquetFileWriter.create(OutputFile.of(file.toPath()), schema).use { writer ->
+            val rows = writer.rowWriter()
+            for (packet in recording.packets) {
+                rows.writeRow { row ->
+                    row.setLong("id", recording.id)
+                        .setLong("started", recording.started)
+                        .setString("player", recording.player)
+                        .setString("recording_type", recording.type.name)
+                        .setString("packet_type", packet.type)
+                        .setLong("timestamp", packet.timestamp)
+
+                    // Whatever payload the packet carries; leaves the other
+                    // payload columns unset (null in the file).
+                    when (val data = packet.data) {
+                        is MoveData -> row.setDouble("x", data.x)
+                            .setDouble("y", data.y)
+                            .setDouble("z", data.z)
+                            .setFloat("yaw", data.yaw)
+                            .setFloat("pitch", data.pitch)
+                            .setBoolean("f", data.onGround)
+                            .setBoolean("hasPos", data.hasPos)
+                            .setBoolean("hasLook", data.hasLook)
+                        is AnimationData -> row.setLong("animation_timestamp", data.timestamp)
+                        is HeldItemData -> row.setInt("itemInHandIndex", data.itemInHandIndex)
+                    }
+
+                    val c = packet.context
+                    row.setFloat("fly_speed", c.flySpeed)
+                        .setDouble("velocity_z", c.velocityZ)
+                        .setDouble("location_x", c.locationX)
+                        .setDouble("location_y", c.locationY)
+                        .setDouble("location_direction_y", c.locationDirectionY)
+                        .setDouble("location_direction_x", c.locationDirectionX)
+                        .setDouble("velocity_x", c.velocityX)
+                        .setDouble("velocity_y", c.velocityY)
+                        .setFloat("saturation", c.saturation)
+                        .setDouble("location_direction_z", c.locationDirectionZ)
+                        .setDouble("location_z", c.locationZ)
+                        .setInt("food_level", c.foodLevel)
+                        .setFloat("eye_location_yaw", c.eyeLocationYaw)
+                        .setFloat("walk_speed", c.walkSpeed)
+                        .setDouble("eye_height", c.eyeHeight)
+                        .setBoolean("allow_flight", c.allowFlight)
+                        .setFloat("exhaustion", c.exhaustion)
+                        .setDouble("health", c.health)
+                        .setFloat("eye_location_pitch", c.eyeLocationPitch)
+                        .setFloat("location_pitch", c.locationPitch)
+                        .setFloat("fall_distance", c.fallDistance)
+                        .setFloat("location_yaw", c.locationYaw)
+                        .setDouble("health_scale", c.healthScale)
+                        .setBoolean("sprinting", c.sprinting)
+                        .setDouble("eye_location_y", c.eyeLocationY)
+                        .setDouble("eye_location_x", c.eyeLocationX)
+                        .setBoolean("flying", c.flying)
+                        .setDouble("eye_location_z", c.eyeLocationZ)
+                        .setBoolean("sneaking", c.sneaking)
+                        .setBoolean("on_ground", c.onGround)
+                }
+            }
+        }
+    }
+}

@@ -25,15 +25,6 @@ kotlin {
     jvmToolchain(21)
 }
 
-// The Kotlin plugin doesn't feed .java files in src/main/kotlin to javac.
-sourceSets.main {
-    java.srcDirs("src/main/kotlin")
-}
-
-tasks.withType<JavaCompile>().configureEach {
-    options.encoding = "UTF-8"
-}
-
 tasks.test {
     useJUnit()
 }

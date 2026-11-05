@@ -35,7 +35,7 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnit()
 }
 
 tasks.shadowJar {

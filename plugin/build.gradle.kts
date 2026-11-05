@@ -20,9 +20,14 @@ dependencies {
     // ZSTD codec; without it Hardwood falls back to UNCOMPRESSED pages.
     implementation("dev.hardwood:hardwood-core:1.1.0.Beta3")
     implementation("com.github.luben:zstd-jni:1.5.7-3")
-    // S3-compatible uploads (Cloudflare R2). No AWS SDK install needed; the
-    // static keys come from the plugin config.
-    implementation("dev.hardwood:hardwood-s3:1.1.0.Beta3")
+
+    // Uploads to the S3-compatible bucket (Cloudflare R2). Hardwood's s3 module
+    // has no write API in any release, so the AWS SDK v2 carries this; the
+    // url-connection client avoids pulling in Netty.
+    val awssdk = platform("software.amazon.awssdk:bom:2.57.9")
+    implementation(awssdk)
+    implementation("software.amazon.awssdk:s3")
+    implementation("software.amazon.awssdk:url-connection-client")
 
     testImplementation(kotlin("test"))
 }

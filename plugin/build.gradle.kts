@@ -20,6 +20,9 @@ dependencies {
     // ZSTD codec; without it Hardwood falls back to UNCOMPRESSED pages.
     implementation("dev.hardwood:hardwood-core:1.1.0.Beta3")
     implementation("com.github.luben:zstd-jni:1.5.7-3")
+    // S3-compatible uploads (Cloudflare R2). No AWS SDK install needed; the
+    // static keys come from the plugin config.
+    implementation("dev.hardwood:hardwood-s3:1.1.0.Beta3")
 
     testImplementation(kotlin("test"))
 }

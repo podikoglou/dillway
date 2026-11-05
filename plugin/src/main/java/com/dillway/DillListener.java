@@ -31,7 +31,7 @@ public class DillListener implements Listener {
     // Public API
     // -------------------------------------------------------------------------
 
-    public boolean startRecording(Player player, String type) {
+    public boolean startRecording(Player player, RecordingType type) {
         if (sessions.containsKey(player.getUniqueId())) return false;
         sessions.put(player.getUniqueId(), new RecordingSession(player.getUniqueId(), type));
         return true;
@@ -183,14 +183,8 @@ public class DillListener implements Listener {
         output.put("type",    session.type);
         output.put("packets", session.packets);
 
-        // Route into the right subfolder to match data-main layout
-        String subfolder = switch (session.type) {
-            case "LEGIT"  -> "legit";
-            case "SPEED"  -> "speed";
-            default       -> "recordings";
-        };
-
-        File dir  = new File(plugin.getDataFolder(), subfolder);
+        // Route into the subfolder named by the label
+        File dir = new File(plugin.getDataFolder(), session.type.folder());
         dir.mkdirs();
         File file = new File(dir, session.started + ".json");
 

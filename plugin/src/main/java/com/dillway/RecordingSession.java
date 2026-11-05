@@ -9,10 +9,10 @@ public class RecordingSession {
 
     public final UUID playerId;
     public final long started;
-    public final String type; // "LEGIT", "SPEED", etc.
+    public final RecordingType type;
     public final List<Object> packets = new ArrayList<>();
 
-    public RecordingSession(UUID playerId, String type) {
+    public RecordingSession(UUID playerId, RecordingType type) {
         this.playerId = playerId;
         this.started  = System.currentTimeMillis();
         this.type     = type;

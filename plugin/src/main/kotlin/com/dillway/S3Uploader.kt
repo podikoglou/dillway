@@ -1,12 +1,16 @@
 package com.dillway
 
-import dev.hardwood.OutputFile
-import dev.hardwood.s3.S3Credentials
-import dev.hardwood.s3.S3Source
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
+import software.amazon.awssdk.core.sync.RequestBody
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient
+import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.services.s3.S3Client
+import software.amazon.awssdk.services.s3.S3Configuration
+import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import java.io.File
-import java.io.FileInputStream
 import java.io.IOException
-import java.nio.ByteBuffer
+import java.net.URI
 
 /**
  * Uploads finished recordings to an S3-compatible bucket (Cloudflare R2).
@@ -16,12 +20,12 @@ import java.nio.ByteBuffer
  * the local copy once the upload succeeds. A failed upload keeps the file for
  * a later manual push; the recording is never lost while the server is up.
  *
- * Staging takes its values from `config.yml` under `s3:`; a disabled or
- * misconfigured uploader makes every [upload] a no-op.
+ * Takes its values from `config.yml` under `s3:`; a disabled or misconfigured
+ * uploader makes every [upload] a no-op.
  */
 class S3Uploader(private val plugin: DillPlugin) {
 
-    private var source: S3Source? = null
+    private var source: S3Client? = null
     private var bucket = ""
     private var keyPrefix = ""
 
@@ -50,10 +54,19 @@ class S3Uploader(private val plugin: DillPlugin) {
         }
 
         return try {
-            source = S3Source.builder()
-                .endpoint(endpoint)
-                .pathStyle(pathStyle)
-                .credentials(S3Credentials.of(accessKeyId, secretAccessKey))
+            source = S3Client.builder()
+                .endpointOverride(URI.create(endpoint))
+                // AWS requires a region; R2 spans all and answers "auto".
+                .region(Region.of("auto"))
+                .credentialsProvider(
+                    StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(accessKeyId, secretAccessKey),
+                    ),
+                )
+                .serviceConfiguration(
+                    S3Configuration.builder().pathStyleAccessEnabled(pathStyle).build(),
+                )
+                .httpClient(UrlConnectionHttpClient.create())
                 .build()
             true
         } catch (e: IllegalArgumentException) {
@@ -65,60 +78,42 @@ class S3Uploader(private val plugin: DillPlugin) {
 
     /** Closes the client. The server must not upload after this call. */
     fun stop() {
-        source?.let { source ->
-            try {
-                source.close()
-            } catch (e: IOException) {
-                plugin.logger.warning("Closing s3 client failed: ${e.message}")
-            }
-        }
+        source?.close()
         source = null
     }
 
     /**
      * Uploads [file] to the bucket as one finished recording of [type]. Runs
-     * on an async worker so the caller (the server main thread) is never held
-     * on the network call; after [DillPlugin.onDisable] started stopping, new
-     * async tasks cannot run, so the upload happens on the calling thread.
+     * on an async worker so the caller is never held on the network call;
+     * after [DillPlugin.onDisable] the scheduler cannot start new tasks, so
+     * the upload happens on the calling thread instead.
      */
     fun upload(file: File, type: RecordingType, fileName: String) {
         if (source == null) return
         if (plugin.isEnabled) {
-            plugin.server.scheduler.runTaskAsynchronously(plugin) {
-                uploadBlocking(file, type, fileName)
-            }
+            plugin.server.scheduler.runTaskAsynchronously(
+                plugin,
+                Runnable { uploadBlocking(file, type, fileName) },
+            )
         } else {
             uploadBlocking(file, type, fileName)
         }
     }
 
-    /**
-     * Streams the local parquet into the bucket at
-     * `[<key-prefix>]/<type>/<fileName>`. Hardwood's `OutputFile` is the
-     * upload sink; the multipart details (8 MiB parts, four in flight,
-     * completion on close) are the module's job.
-     *
-     * A failure to complete releases the uploaded parts, and nothing appears
-     * at the key — a bucket lifecycle rule on incomplete multipart uploads is
-     * the safety net for a process that died mid-upload.
-     */
+    /** Streams [file] to the bucket at `[<key-prefix>]/<type>/<fileName>`. */
     private fun uploadBlocking(file: File, type: RecordingType, fileName: String) {
         val s3 = source ?: return
         val key = keyFor(type, fileName)
 
         try {
-            val out: OutputFile = s3.outputFile(bucket, key)
-            out.use { sink ->
-                sink.create() // the writer framework calls this; manual use must too
-                FileInputStream(file).buffered().use { input ->
-                    val chunk = ByteArray(CHUNK_BYTES)
-                    while (true) {
-                        val read = input.read(chunk)
-                        if (read < 0) break
-                        if (read > 0) sink.write(ByteBuffer.wrap(chunk, 0, read))
-                    }
-                }
-            }
+            s3.putObject(
+                PutObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(key)
+                    .contentType("application/octet-stream")
+                    .build(),
+                RequestBody.fromFile(file),
+            )
             if (file.exists() && !file.delete()) {
                 plugin.logger.warning("Uploaded $key but could not delete the local copy $file")
             }
@@ -135,9 +130,4 @@ class S3Uploader(private val plugin: DillPlugin) {
             .joinToString("/")
 
     private fun value(path: String): String = plugin.config.getString(path)?.trim().orEmpty()
-
-    private companion object {
-        /** Uploads are once-per-recording; a 64 KiB read chunk keeps memory tiny. */
-        private const val CHUNK_BYTES = 64 * 1024
-    }
 }

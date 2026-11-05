@@ -22,7 +22,7 @@ public class DillPlugin extends JavaPlugin {
 
         Blade.forPlatform(new BladePaperPlatform(this))
             .config(cfg -> cfg.defaultPermissionMessage(
-                "§cYou don't have permission to use this command."))
+                "You don't have permission to use this command."))
             .build()
             .register(new DillCommand(listener));
     }

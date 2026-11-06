@@ -40,10 +40,10 @@ any other directory must match the `--cheat` name being trained.
 ## Pipeline
 
 ```
-R2 dataset bucket ──► Modal job ──► ONNX artifacts ──► R2 models bucket
- /data/recordings/     │  load →   models/speed/<ver>/model.onnx
-   legit/*.parquet     │  window →                       manifest.json
-   speed/*.parquet     │  features
+R2 bucket: dillway ──► Modal job ──► artifacts back to dillway
+ recordings/<type>/    │  load →   models/<cheat>/<ver>/model.onnx
+   *.parquet           │  window →                     manifest.json
+                       │  features
                        │  GroupKFold CV (group = player UUID)
                        │  RandomForest fit
                        │  skl2onnx compile + parity check
@@ -93,14 +93,15 @@ uv sync
    R2_ACCOUNT_ID=<cloudflare_account_id>
    ```
 
-3. Fill the dataset bucket (`dillway-recordings`) with recordings, one
-   directory per label:
+3. Put recordings in the `dillway` bucket under the dataset prefix,
+   one directory per label:
 
    ```
    recordings/legit/<started>.parquet
    recordings/speed/<started>.parquet
    ```
 
+   Artifacts are written back to the same bucket under `models/`.
    (Buckets and prefix can be overridden with `R2_DATASET_BUCKET`,
    `R2_MODELS_BUCKET`, `DW_DATASET_PREFIX`.)
 
@@ -110,8 +111,8 @@ uv sync
 |---|---|---|
 | `R2_ACCOUNT_ID` | — | Cloudflare account id, used to build the bucket endpoint URL (needed by `modal run`) |
 | `R2_ENDPOINT_URL` | — | Explicit endpoint, takes precedence over `R2_ACCOUNT_ID` |
-| `R2_DATASET_BUCKET` | `dillway-recordings` | Bucket the training data is read from |
-| `R2_MODELS_BUCKET` | `dillway-models` | Bucket artifacts are written to |
+| `R2_DATASET_BUCKET` | `dillway` | Bucket the training data is read from |
+| `R2_MODELS_BUCKET` | `dillway` | Bucket artifacts are written to |
 | `DW_DATASET_PREFIX` | `recordings` | Root prefix for label dirs inside the dataset bucket |
 | `DW_DATASET_DIR` | `data` | Local dataset dir for `python -m dw_engine.train` |
 | `DW_MODELS_DIR` | `target` | Local artifact output dir |

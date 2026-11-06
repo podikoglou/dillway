@@ -1,8 +1,8 @@
 """Modal training job for dw-engine.
 
-The Modal function mounts both R2 buckets directly:
-  - dataset bucket  (read-only)  at /data   -> <prefix>/<type>/*.parquet
-  - models bucket   (read-write) at /models -> models/<cheat>/<version>/...
+The Modal function mounts the R2 bucket twice:
+  - read-only  at /data   -> <prefix>/<type>/*.parquet
+  - read-write at /models -> models/<cheat>/<version>/...
 
 Artifacts written to /models are uploaded to R2 by the bucket mount, so
 `modal run src/dw_engine/app.py` is the complete remote pipeline.
@@ -12,7 +12,7 @@ Prerequisites (once):
         AWS_ACCESS_KEY_ID=<r2-access-key> \\
         AWS_SECRET_ACCESS_KEY=<r2-secret-key>
 
-and the local environment needs R2_ACCOUNT_ID (see .env.example).
+The local environment needs R2_ACCOUNT_ID (see .env.example).
 """
 
 from pathlib import Path

@@ -8,7 +8,7 @@ s3:
   endpoint: "https://<account-id>.r2.cloudflarestorage.com"
   # R2 serves the S3 API in path style (<endpoint>/<bucket>/<key>).
   path-style: true
-  bucket: "dillway-recordings"
+  bucket: "dillway"
   access-key-id: ""
   secret-access-key: ""
   # Object keys are <key-prefix>/<type>/<started>.parquet, with the recording

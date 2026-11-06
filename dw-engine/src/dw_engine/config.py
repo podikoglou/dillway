@@ -27,8 +27,8 @@ def r2_endpoint_url() -> str:
     return f"https://{account}.r2.cloudflarestorage.com"
 
 
-DATASET_BUCKET = os.environ.get("R2_DATASET_BUCKET", "dillway-recordings")
-MODELS_BUCKET = os.environ.get("R2_MODELS_BUCKET", "dillway-models")
+DATASET_BUCKET = os.environ.get("R2_DATASET_BUCKET", "dillway")
+MODELS_BUCKET = os.environ.get("R2_MODELS_BUCKET", "dillway")
 
 # Mount points inside Modal containers
 DATASET_MOUNT = "/data"

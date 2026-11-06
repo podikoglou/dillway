@@ -5,7 +5,7 @@ the trained anti-cheat specialists locally on the server.
 
 ## Admin flow
 
-1. Record a player with `/dill rec`, stop with `/dill stop`. Chat
+1. Record a player with `/dill rec start`, stop with `/dill rec stop`. Chat
    buttons then offer: run prediction right away, open the label menu
    (one toggle per cheat plus `legit`), or discard.
 2. Saving writes one parquet per selected label. Uploads happen when

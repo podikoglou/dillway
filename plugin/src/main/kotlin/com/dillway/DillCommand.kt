@@ -125,6 +125,15 @@ class DillCommand(
         plugin.watches.stop(sender, target)
     }
 
+    @Command("dill watch report")
+    @Permission("dillway.admin")
+    fun watchReport(
+        @Sender sender: CommandSender,
+        @Name("player") target: Player,
+    ) {
+        plugin.watches.report(sender, target)
+    }
+
     @Command("dill rec predict")
     @Permission("dillway.admin")
     fun predict(

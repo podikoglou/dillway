@@ -2,16 +2,17 @@
 
 An AI-powered Minecraft anti-cheat system.
 
-| component | role |
-|---|---|
-| `plugin` | [Paper](https://papermc.io) plugin. Records player activity, labels stopped recordings as training data, and runs the downloaded ONNX specialists locally for predictions. See `plugin/README.md` |
-| `dw-engine` | Training pipeline. Pulls labeled recordings from R2, trains on [Modal](https://modal.com), and publishes the compiled ONNX specialists back to R2. See `dw-engine/README.md` |
-| Cloudflare R2 | Object store shared by both: labeled recordings go in, model artifacts come out |
+Two components share one Cloudflare R2 bucket. [`plugin`](plugin/README.md)
+is a [Paper](https://papermc.io) plugin that records player activity, gets
+the recordings labeled as training data, and runs the trained ONNX
+specialists locally for predictions. [`dw-engine`](dw-engine/README.md) is
+the training pipeline — it pulls the labeled recordings from R2, trains on
+[Modal](https://modal.com), and publishes the specialists back.
 
 ```
-               recordings                 artifacts
-+-----------+ ------------->  +---------------+  <------------- +-----------+
-|  plugin   |                  |      r2       |                 | dw-engine |
-|           | <-------------   |  recordings/  |                 |  (Modal)  |
-+-----------+    models down   |     models/   |                 +-----------+
+                 recordings                  recordings
++-----------+ ---------------> +---------------+ ---------------> +-----------+
+|  plugin   |                  |      r2       |                   | dw-engine |
+|           | <--------------- |               | <---------------  |  (Modal)  |
++-----------+    models down   +---------------+     artifacts     +-----------+
 ```

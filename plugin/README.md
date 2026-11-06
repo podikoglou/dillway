@@ -27,10 +27,17 @@ All admin commands require `dillway.admin` (default `op`). Run
 
 ## Self-recording kit
 
-`/dill kit` gives a player one item. A right click records the holder; the
-next right click stops the session and opens the normal save menu. The item
-never moves: it changes its look in place, so the same slot is also the stop
-button. A player who is watched cannot start a recording from the kit.
+`/dill kit` gives a player two items: a recorder and a class selector. A
+right click on the recorder starts a session; the next right click stops it
+and saves it straight under the type shown by the selector, with no menu.
+The selector cycles through `legit` and every known cheat, and keeps its
+choice inside the item, so it survives moving or dropping. The items never
+move: the recorder changes its look in place, so the same slot is also the
+stop button. A player who is watched cannot start a recording from the kit.
+
+`/dill rec stop` still opens the interactive save menu. `/dill rec save
+<id> <label>` saves an existing recording under one type from chat or the
+console; `confirm` keeps its old meaning after the label.
 
 ## Live watch
 

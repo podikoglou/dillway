@@ -9,6 +9,7 @@ import dev.hardwood.writer.ParquetFileWriter
 import java.io.File
 import java.io.OutputStream
 import java.nio.ByteBuffer
+import java.util.Locale
 
 /**
  * Writes recordings as Parquet with the flat, one-row-per-packet layout.
@@ -105,7 +106,7 @@ object RecordingParquet {
                     row.setLong("id", recording.id)
                         .setLong("started", recording.started)
                         .setString("player", recording.player)
-                        .setString("recording_type", recording.type.name)
+                        .setString("recording_type", recording.label.uppercase(Locale.ROOT))
                         .setString("packet_type", packet.type)
                         .setLong("timestamp", packet.timestamp)
 

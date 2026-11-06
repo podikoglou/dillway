@@ -1,17 +1,18 @@
 package com.dillway.recording
 
-import com.dillway.RecordingType
-
 /**
  * The typed recording model. The parquet layout in `RecordingParquet` writes
  * one row per packet, carrying the recording header plus the packet's payload
  * and context.
+ *
+ * [label] is the dataset directory the file belongs to (`legit` or a cheat
+ * name). It is chosen when the recording stops, not when it starts.
  */
 data class Recording(
     val id: Long,
     val started: Long,
     val player: String,
-    val type: RecordingType,
+    val label: String,
     val packets: List<RecordedPacket>,
 )
 

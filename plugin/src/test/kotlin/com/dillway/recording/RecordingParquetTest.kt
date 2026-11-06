@@ -1,6 +1,5 @@
 package com.dillway.recording
 
-import com.dillway.RecordingType
 import dev.hardwood.InputFile
 import dev.hardwood.OutputFile
 import dev.hardwood.reader.ParquetFileReader
@@ -23,7 +22,7 @@ class RecordingParquetTest {
         id = 1674590916014,
         started = 1674590916014,
         player = "78de5f59-ba63-45af-a9a8-8d111e155c29",
-        type = RecordingType.LEGIT,
+        label = "legit",
         packets = listOf(
             RecordedPacket(
                 type = "PacketPlayInPosition",

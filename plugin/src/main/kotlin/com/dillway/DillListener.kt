@@ -27,25 +27,67 @@ class DillListener(private val plugin: DillPlugin) : Listener {
     // Public API
     // -------------------------------------------------------------------------
 
-    fun startRecording(player: Player, type: RecordingType): Boolean {
+    fun startRecording(player: Player): Boolean {
         if (sessions.containsKey(player.uniqueId)) return false
-        sessions[player.uniqueId] = RecordingSession(player.uniqueId, type)
+        sessions[player.uniqueId] = RecordingSession(player.uniqueId)
         return true
     }
 
-    fun stopRecording(player: Player): Boolean {
-        val session = sessions.remove(player.uniqueId) ?: return false
-        saveSession(player, session)
-        return true
+    /**
+     * Detaches the session from the event pipeline. The caller decides what
+     * happens next: label it for training, run inference, or discard it.
+     */
+    fun stopRecording(player: Player): StoppedRecording? {
+        val session = sessions.remove(player.uniqueId) ?: return null
+        return StoppedRecording(player.name, session)
     }
 
     fun isRecording(player: Player): Boolean = sessions.containsKey(player.uniqueId)
 
-    /** Called on shutdown — flushes every active session. */
+    /**
+     * Writes one parquet copy for [label] and returns it, or null on failure.
+     * A multi-cheat recording is written once per selected label, which keeps
+     * the trainer's directory-per-label contract. Call off the main thread.
+     */
+    fun write(stopped: StoppedRecording, label: String): File? {
+        val dir = File(plugin.dataFolder, label).apply { mkdirs() }
+        val file = File(dir, "${stopped.session.started}.parquet")
+
+        val recording = Recording(
+            id = stopped.session.started,
+            started = stopped.session.started,
+            player = stopped.session.playerId.toString(),
+            label = label,
+            packets = stopped.session.packets.toList(),
+        )
+
+        return try {
+            RecordingParquet.writeRecording(file, recording)
+            plugin.logger.info(
+                "Saved $label recording for ${stopped.playerName} → ${file.name} " +
+                    "(${stopped.session.packets.size} packets)",
+            )
+            file
+        } catch (e: IOException) {
+            plugin.logger.severe("Failed to save recording: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Called on shutdown. Active sessions cannot be labeled anymore, so they
+     * are written locally as `unlabeled` for later manual sorting and are not
+     * uploaded.
+     */
     fun stopAll() {
         // Copy the keys; the removal inside the loop mutates the map.
         sessions.keys.toList().forEach { id ->
-            plugin.server.getPlayer(id)?.let(::stopRecording)
+            val session = sessions.remove(id) ?: return@forEach
+            val name = plugin.server.getPlayer(id)?.name ?: id.toString()
+            plugin.logger.warning(
+                "Server stopping: saving active recording of $name as ${Labels.UNLABELED}",
+            )
+            write(StoppedRecording(name, session), Labels.UNLABELED)
         }
     }
 
@@ -170,33 +212,5 @@ class DillListener(private val plugin: DillPlugin) : Listener {
             sneaking = isSneaking,
             onGround = clientOnGround(),
         )
-    }
-
-    // -------------------------------------------------------------------------
-    // Persistence
-    // -------------------------------------------------------------------------
-
-    private fun saveSession(player: Player, session: RecordingSession) {
-        val dir = File(plugin.dataFolder, session.type.folder).apply { mkdirs() }
-        val file = File(dir, "${session.started}.parquet")
-
-        val recording = Recording(
-            id = session.started,
-            started = session.started,
-            player = session.playerId.toString(),
-            type = session.type,
-            packets = session.packets.toList(),
-        )
-
-        try {
-            RecordingParquet.writeRecording(file, recording)
-            plugin.logger.info(
-                "Saved ${session.type} recording for ${player.name} → ${file.name} " +
-                    "(${session.packets.size} packets)",
-            )
-            plugin.uploader.upload(file, session.type, file.name)
-        } catch (e: IOException) {
-            plugin.logger.severe("Failed to save recording: ${e.message}")
-        }
     }
 }

@@ -59,9 +59,9 @@ class DillPlugin : JavaPlugin() {
     }
 
     override fun onDisable() {
-        // Pending recordings cannot be labeled during shutdown; drop them.
+        // Waiting and active recordings are flushed locally as `unlabeled`
+        // (they cannot be labeled during shutdown and are never uploaded).
         flow.clear()
-        // Active sessions are flushed as local-only `unlabeled` files.
         listener.stopAll()
         models.close()
         storage.stop()

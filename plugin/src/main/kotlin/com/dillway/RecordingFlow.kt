@@ -206,10 +206,17 @@ class RecordingFlow(
         )
     }
 
-    /** Called on shutdown; unresolved recordings cannot be labeled anymore. */
+    /**
+     * Called on shutdown. Unresolved recordings cannot be labeled anymore,
+     * so they are written locally as `unlabeled` instead of being dropped.
+     */
     fun clear() {
-        if (pending.isNotEmpty()) {
-            plugin.logger.warning("Discarding ${pending.size} unresolved recording(s) on shutdown")
+        pending.values.forEach { entry ->
+            plugin.logger.warning(
+                "Server stopping: saving waiting recording of " +
+                    "${entry.stopped.playerName} as ${Labels.UNLABELED}",
+            )
+            listener.write(entry.stopped, Labels.UNLABELED)
         }
         pending.clear()
     }

@@ -54,11 +54,9 @@ class RecordingFlow(
             .append(Component.newline())
 
         if (sender is Player) {
-            text.append(
-                chatButton("[Use as training data]", "/dill training", NamedTextColor.GREEN),
-            )
+            text.append(chatButton("[Train]", "/dill training", NamedTextColor.GREEN))
                 .append(separator())
-                .append(chatButton("[Run prediction]", "/dill predict", NamedTextColor.AQUA))
+                .append(chatButton("[Predict]", "/dill predict", NamedTextColor.AQUA))
                 .append(separator())
                 .append(chatButton("[Discard]", "/dill discard", NamedTextColor.RED))
         } else {

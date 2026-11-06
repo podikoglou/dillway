@@ -269,6 +269,9 @@ class WatchService(private val plugin: DillPlugin) {
         if (InferenceWindows.movementCount(packets) < InferenceWindows.MIN_MOVEMENT_PACKETS) {
             if (!watch.toldIdle) {
                 watch.toldIdle = true
+                // Stop repeating the last line: the numbers no longer describe
+                // the current state, and the idle notice says why.
+                watch.barLine = null
                 notify(
                     watch,
                     mini(

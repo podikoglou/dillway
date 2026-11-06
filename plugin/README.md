@@ -65,6 +65,13 @@ at the same time: stop the other mode first.
 - Output per cheat: mean and max window probability, window count, and
   a verdict at the configured threshold.
 
+## Metrics
+
+`/dill metrics` prints in-memory counters: recording sessions and captured
+packets, inference runs with average/peak/last duration, windows, flagged
+verdicts and model failures, live watches, uploads, and model refreshes.
+Nothing is persisted, so every counter resets with the server.
+
 ## Build
 
 ```sh

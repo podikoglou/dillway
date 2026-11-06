@@ -73,10 +73,10 @@ class DillCommand(
         }
     }
 
-    @Command("dill training")
+    @Command("dill train")
     @Permission("dillway.admin")
-    fun training(@Sender sender: CommandSender) {
-        flow.training(sender)
+    fun train(@Sender sender: CommandSender) {
+        flow.train(sender)
     }
 
     @Command("dill label")

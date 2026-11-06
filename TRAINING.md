@@ -5,7 +5,7 @@ Specialists are independent.
 
 ## 1. Record
 
-Use the plugin (`plugin/README.md`). Keep whole sessions, one file per recording:
+Use the plugin (`dw-agent/README.md`). Keep whole sessions, one file per recording:
 
 ```
 <dataset-root>/<label>/<started>.parquet
@@ -27,7 +27,7 @@ windows that are too short or have too few movement packets.
 
 ## 3. Configure
 
-See Setup in `dw-engine/README.md` and the config notes in `plugin/README.md`.
+See Setup in `dw-engine/README.md` and the config notes in `dw-agent/README.md`.
 
 The trainer needs read access to the dataset and write access to the model
 prefix. The plugin needs read access to the model prefix.
@@ -39,7 +39,7 @@ See Run in `dw-engine/README.md`.
 ## 5. Deploy
 
 Publish the artifacts described in `dw-engine/README.md`, then reload the models
-as described in `plugin/README.md`.
+as described in `dw-agent/README.md`.
 
 ## 6. Add a cheat
 

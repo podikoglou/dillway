@@ -3,7 +3,7 @@ a Python training pipeline sharing a Cloudflare R2 object store.
 
 Tooling: Python via `uv`; the plugin via the gradle wrapper (`./gradlew`).
 
-Component docs: `plugin/README.md`, `dw-engine/README.md`.
+Component docs: `dw-agent/README.md`, `dw-engine/README.md`.
 
 ## Documentation rules
 

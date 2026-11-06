@@ -1,9 +1,13 @@
-# dillway plugin
+# dw-agent
 
 [Paper](https://papermc.io) plugin that records player activity and runs
 the trained anti-cheat specialists locally on the server.
 
 To turn recordings into a model, see [../TRAINING.md](../TRAINING.md).
+
+The plugin was previously named Dillway. On the first start after the
+rename it moves `plugins/Dillway` to `plugins/dw-agent`, so recordings,
+models and config carry over.
 
 ## Admin flow
 
@@ -21,7 +25,8 @@ To turn recordings into a model, see [../TRAINING.md](../TRAINING.md).
 5. Consoles get command names instead of clickable buttons; everything
    works by typing the commands.
 
-All admin commands require `dillway.admin` (default `op`). Run
+All admin commands require `dillway.admin` (default `op`). The node keeps
+its old name so existing permission setups work unchanged. Run
 `/dill models reload` after training new specialists. Config lives in
 `src/main/resources/config.yml`.
 
@@ -75,7 +80,7 @@ Nothing is persisted, so every counter resets with the server.
 ## Build
 
 ```sh
-./gradlew shadowJar   # → build/libs/dillway.jar
+./gradlew shadowJar   # → build/libs/dw-agent.jar
 ./gradlew test        # includes a Python↔Kotlin feature-parity check
 ```
 

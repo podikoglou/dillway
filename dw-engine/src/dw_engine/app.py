@@ -43,15 +43,17 @@ r2_secret = modal.Secret.from_name(
 
 dataset_mount = modal.CloudBucketMount(
     bucket_name=config.DATASET_BUCKET,
-    bucket_endpoint_url=config.r2_endpoint_url(),
+    bucket_endpoint_url=config.BUCKET_URL,
     secret=r2_secret,
     read_only=True,
+    force_path_style=True,
 )
 models_mount = modal.CloudBucketMount(
     bucket_name=config.MODELS_BUCKET,
-    bucket_endpoint_url=config.r2_endpoint_url(),
+    bucket_endpoint_url=config.BUCKET_URL,
     secret=r2_secret,
     read_only=False,
+    force_path_style=True,
 )
 
 

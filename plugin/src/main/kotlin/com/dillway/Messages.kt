@@ -13,7 +13,9 @@ import java.util.Locale
 private val MINI = MiniMessage.miniMessage()
 
 /** Thousands-separated count, so long packet counts stay readable. */
-fun count(value: Int): String = String.format(Locale.ROOT, "%,d", value)
+fun count(value: Int): String = count(value.toLong())
+
+fun count(value: Long): String = String.format(Locale.ROOT, "%,d", value)
 
 /** `2.0` becomes `2`: chat numbers without noise zeros. */
 fun number(value: Double): String =

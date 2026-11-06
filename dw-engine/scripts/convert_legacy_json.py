@@ -1,30 +1,27 @@
-"""Convert JSON recordings to parquet, split into windows.
+"""Convert JSON recordings to the parquet dataset layout.
 
-The parquet ingester (dw_engine/parquet.py) reads one parquet file per
-window. This script converts the older JSON recordings to that format
-up front, so the training data can be uploaded as parquet:
+The engine stores one parquet file per recording and slices windows at
+training time (dw_engine.dataset.build_windows()). This script converts
+the older JSON recordings to the same layout, so legacy and plugin data
+look identical:
 
 Input: one JSON file per recording, packets nested under "packets",
 each packet a {type, timestamp, data, context} dict:
 
-    ../data-main/legit/<started>.json
-    ../data-main/speed/<started>.json
+    <json-root>/<label>/<started>.json
 
-Output: one parquet file per window, already split with the same
-windowing the training pipeline applies, so the ingester reads each
-file back as exactly one window:
+Output: one parquet file per recording, not per window:
 
-    <out>/<type>/<started>.parquet     e.g. converted/recordings/legit/1674591086943.parquet
+    <out>/<label>/<started>.parquet
 
-Window boundaries come from `split_windows`, the same function the
-trainer uses. Windows with fewer movement packets than
-`MIN_MOVEMENT_PACKETS` are dropped here, the same threshold the
-trainer applies.
+Keep the sessions whole. The trainer owns the window size, so changing
+`WINDOW_SECONDS` or adding a specialist with a different window needs
+no reconversion.
 
 Usage (from dw-engine/):
 
     uv run python scripts/convert_legacy_json.py \
-        --src ../data-main --out converted/recordings
+        --src <json-root> --out converted/recordings
 """
 
 import argparse
@@ -34,10 +31,6 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-
-from dw_engine import config
-from dw_engine.dataset import split_windows
-from dw_engine.features import MOVEMENT_TYPES
 
 # Flat recording schema: recording header + packet row + move payload +
 # player context. Header and context columns are required (present on
@@ -168,11 +161,11 @@ def _rows_for(recording: dict, packets: list[dict]) -> list[dict]:
     return rows
 
 
-def _write_window(
-    out_dir: Path, recording: dict, window_packets: list[dict], start_ts: int
-) -> Path:
+def _write_recording(out_dir: Path, recording: dict, fallback_id: str) -> Path:
+    """Write one whole recording to a parquet file and return its path."""
+    session_id = recording.get("started") or recording.get("id") or fallback_id
     columnar = {f.name: [] for f in SCHEMA}
-    for row in _rows_for(recording, window_packets):
+    for row in _rows_for(recording, recording["packets"]):
         # Rows of packet kinds without a payload leave those keys unset;
         # the columns are nullable, so a plain None entry is correct.
         for name in columnar:
@@ -182,71 +175,45 @@ def _write_window(
         schema=SCHEMA,
     )
     out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"{start_ts}.parquet"
+    path = out_dir / f"{session_id}.parquet"
     pq.write_table(table, path)
     return path
 
 
-def convert(src: Path, out: Path) -> None:
-    """Convert every label directory under src into windowed parquet."""
-    total_windows = Counter()
-    # Window size per directory: cheats use their own entry. Legit
-    # recordings are the negative class shared by every specialist, and
-    # the trainer re-slices each legit file to that specialist's window
-    # size, so legit files are cut to the largest configured window and
-    # never shorter than any specialist needs.
-    max_window_s = max(config.WINDOW_SECONDS.values())
+def convert(src: Path, out: Path) -> Counter:
+    """Convert every label directory under src into whole-session parquet."""
+    total_recordings = Counter()
     for class_dir in sorted(p for p in src.iterdir() if p.is_dir()):
         cheat = class_dir.name.lower()
-        window_s = max_window_s if cheat == "legit" else config.WINDOW_SECONDS.get(cheat)
-        if window_s is None:
-            print(f"  !! {cheat}: no WINDOW_SECONDS entry, skipping this directory")
-            continue
         out_dir = out / cheat
         converted = skipped_empty = 0
         for path in sorted(class_dir.glob("*.json")):
             with open(path) as f:
                 recording = json.load(f)
-            if not recording or not isinstance(recording.get("packets"), list):
+            if (
+                not recording
+                or not isinstance(recording.get("packets"), list)
+                or not recording["packets"]
+            ):
                 skipped_empty += 1
                 continue
             # Normalize once here: each output file carries its label and
             # player in the header, so the trainer never needs the folder
             # name to know what a file is.
             recording.setdefault("type", cheat.upper())
-            windows = split_windows(recording, window_s)
-            if not windows:
-                skipped_empty += 1
-                continue
-            for start_ts, end_ts in windows:
-                window_packets = [
-                    p
-                    for p in recording["packets"]
-                    if start_ts <= p.get("timestamp", 0) <= end_ts
-                ]
-                # Same threshold the loader applies; drop here instead of
-                # shipping windows the training run would reject anyway.
-                movement = sum(
-                    1
-                    for p in window_packets
-                    if p.get("type", "") in MOVEMENT_TYPES
-                )
-                if movement < config.MIN_MOVEMENT_PACKETS:
-                    skipped_empty += 1
-                    continue
-                _write_window(out_dir, recording, window_packets, start_ts)
-                converted += 1
-        total_windows[cheat] += converted
+            _write_recording(out_dir, recording, path.stem)
+            converted += 1
+        total_recordings[cheat] += converted
         print(
-            f"  {cheat}: {converted} window files written "
-            f"({skipped_empty} recordings/windows skipped)"
+            f"  {cheat}: {converted} recordings written "
+            f"({skipped_empty} skipped)"
         )
-    return total_windows
+    return total_recordings
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--src", type=Path, default=Path("../data-main"))
+    parser.add_argument("--src", type=Path, required=True)
     parser.add_argument("--out", type=Path, default=Path("converted/recordings"))
     args = parser.parse_args(argv)
 

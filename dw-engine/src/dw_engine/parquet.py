@@ -6,6 +6,9 @@ packet's timestamp, type, payload, and captured player context.
 Payload columns are null where the packet kind has no such payload;
 context columns are always present.
 
+A file normally holds one whole recording; windowing happens later in
+dataset.py, not in the reader.
+
 The engine's feature/window code consumes the nested per-packet shape
 (type / timestamp / data / context dicts), so load_session() rebuilds
 that shape from the flat rows. Columns are matched by name, so column

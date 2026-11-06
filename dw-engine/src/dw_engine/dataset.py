@@ -5,11 +5,21 @@ directory:
 
     <root>/<type>/<started>.parquet   e.g. legit/1674591086943.parquet
 
-Per data-main/docs/DATASET.md, training samples are windows of (a few)
-seconds of packets, not whole recordings. split_windows() slices each
-recording on movement-packet timestamps; a gap longer than the window
-length closes the current window. Windows shorter than the target
-length, or with fewer usable movement packets, are discarded.
+A file normally holds a whole session. The plugin uploads whole
+sessions, and the trainer is the only place that cuts them into
+windows, so a window-size change needs no new recordings.
+
+Training samples are windows of (a few) seconds of packets, not whole
+recordings. split_windows() slices each recording on movement-packet
+timestamps: the first movement packet
+opens a window, and the first movement packet at or after the window
+length closes it and opens the next one. The closing packet belongs to
+both windows, matching the plugin's inference splitter. Windows shorter
+than the target length, or with fewer usable movement packets, are
+discarded.
+
+A file may also hold one pre-cut window from the older converter. Such
+a file re-slices to itself, so the reader accepts both layouts.
 
 Every window keeps its metadata: label, player UUID (the group key used
 by grouped cross-validation), and the source recording id.
@@ -69,9 +79,12 @@ def iter_recordings(root: Path) -> Iterator[tuple[dict, str, str]]:
 def split_windows(recording: dict, window_s: float) -> list[tuple[int, int]]:
     """Return (start_ts, end_ts) epoch-ms bounds for each full window.
 
-    Boundaries come from movement packets: a gap longer than the window
-    size closes the current window. Only windows that actually span
-    window_s of movement time are kept.
+    Windows are fixed-length chunks over movement-packet time. The first
+    movement packet opens a window; the first movement packet at or after
+    window_s closes it and opens the next window. The closing packet is
+    in both windows, so the bounds are inclusive at both ends. Only
+    windows that actually span window_s are kept; the trailing partial
+    window is dropped.
     """
     stamps = [
         p["timestamp"]
@@ -94,9 +107,9 @@ def build_windows(root: Path, cheat: str) -> list[Window]:
     """Slice every recording under root into labeled windows for one cheat.
 
     Only 'legit' recordings (negative) and '<cheat>' recordings
-    (positive) are used — a "speed" specialist must not train on, say,
-    killaura recordings, since a specialist's negatives must be
-    genuinely cheat-free for that check (data-main/docs/ARCHITECTURE.md).
+    (positive) are used. A specialist must not train on recordings for
+    another cheat, because its negatives must be genuinely cheat-free for
+    that check (TRAINING.md).
     """
     window_s = config.WINDOW_SECONDS.get(cheat)
     if window_s is None:

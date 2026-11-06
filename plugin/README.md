@@ -32,11 +32,10 @@ a recording that has already stopped. The buffer holds only the last window
 of play, so the numbers track the current behaviour.
 
 The live state is written above the hotbar, where it overwrites itself, so a
-steady verdict sends no chat messages. Chat carries one line only when the
-set of flagged models changes; the `[Report]` button and `/dill watch stop`
-print the full report. Consoles have no action bar, so they get the full
-report on a change instead. `watch.display` in the config selects chat-only
-mode.
+watch stays silent in chat. The full report is available on demand and is
+printed when the watch stops. Consoles have no action bar, so they get the
+full report when a verdict changes; `watch.display` in the config selects
+that chat-only mode for players too.
 
 A watch writes nothing to disk and ends when the player leaves, on
 `/dill watch stop`, or at shutdown. A player cannot be recorded and watched

@@ -21,13 +21,17 @@ import modal
 
 from dw_engine import config, train
 
-IMAGE = modal.Image.debian_slim(python_version="3.12").uv_pip_install(
-    "numpy==2.5.4",
-    "scikit-learn==1.9.1",
-    "skl2onnx==1.20.0",
-    "onnx==1.23.2",
-    "onnxruntime==1.31.1",
-    "pyarrow==26.0.1",
+IMAGE = (
+    modal.Image.debian_slim(python_version="3.12")
+    .uv_pip_install(
+        "numpy==2.5.4",
+        "scikit-learn==1.9.1",
+        "skl2onnx==1.20.0",
+        "onnx==1.23.2",
+        "onnxruntime==1.31.1",
+        "pyarrow==26.0.1",
+    )
+    .add_local_python_source("dw_engine")
 )
 
 app = modal.App("dw-engine", image=IMAGE)

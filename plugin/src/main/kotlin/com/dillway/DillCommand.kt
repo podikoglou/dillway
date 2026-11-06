@@ -1,30 +1,35 @@
 package com.dillway
 
+import com.dillway.model.ModelManager
 import me.vaperion.blade.annotation.command.Command
 import me.vaperion.blade.annotation.command.Permission
 import me.vaperion.blade.annotation.parameter.Name
 import me.vaperion.blade.annotation.parameter.Sender
-import net.kyori.adventure.text.minimessage.MiniMessage
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder
-import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 
 /** Registers the /dill command tree with Blade. */
-class DillCommand(private val listener: DillListener) {
+class DillCommand(
+    private val plugin: DillPlugin,
+    private val listener: DillListener,
+    private val flow: RecordingFlow,
+    private val modelManager: ModelManager,
+) {
 
     @Command("dill rec")
     @Permission("dillway.admin")
     fun rec(
         @Sender sender: CommandSender,
         @Name("player") target: Player,
-        @Name("type") type: RecordingType,
     ) {
-        if (listener.startRecording(target, type)) {
+        if (listener.startRecording(target)) {
             sender.sendMini(
-                "<green>Recording <yellow><player></yellow> as <aqua><type></aqua>",
+                "<green>Recording <yellow><player></yellow>. " +
+                    "Stop with <white>/dill stop <player></white>.</green>",
                 Placeholder.unparsed("player", target.name),
-                Placeholder.parsed("type", type.name),
             )
         } else {
             sender.sendMini(
@@ -40,22 +45,130 @@ class DillCommand(private val listener: DillListener) {
         @Sender sender: CommandSender,
         @Name("player") target: Player,
     ) {
-        if (listener.stopRecording(target)) {
-            sender.sendMini(
-                "<green>Stopped recording <yellow><player></yellow>",
-                Placeholder.unparsed("player", target.name),
-            )
-        } else {
+        val stopped = listener.stopRecording(target)
+        if (stopped == null) {
             sender.sendMini(
                 "<red><player> is not being recorded</red>",
                 Placeholder.unparsed("player", target.name),
             )
+        } else {
+            flow.offer(sender, stopped)
         }
     }
-}
 
-private val MINI = MiniMessage.miniMessage()
+    @Command("dill training")
+    @Permission("dillway.admin")
+    fun training(@Sender sender: CommandSender) {
+        flow.training(sender)
+    }
 
-private fun CommandSender.sendMini(template: String, vararg resolvers: TagResolver) {
-    sendMessage(MINI.deserialize(template, *resolvers))
+    @Command("dill label")
+    @Permission("dillway.admin")
+    fun label(
+        @Sender sender: CommandSender,
+        @Name("label") label: String,
+    ) {
+        flow.toggleLabel(sender, label)
+    }
+
+    @Command("dill save")
+    @Permission("dillway.admin")
+    fun save(@Sender sender: CommandSender) {
+        flow.save(sender)
+    }
+
+    @Command("dill predict")
+    @Permission("dillway.admin")
+    fun predict(@Sender sender: CommandSender) {
+        flow.predict(sender)
+    }
+
+    @Command("dill discard")
+    @Permission("dillway.admin")
+    fun discard(@Sender sender: CommandSender) {
+        flow.discard(sender)
+    }
+
+    @Command("dill models")
+    @Permission("dillway.admin")
+    fun models(@Sender sender: CommandSender) {
+        val loaded = modelManager.summary()
+        if (loaded.isEmpty()) {
+            sender.sendMini(
+                "<gray>No models loaded. Try <white>/dill models reload</white>.</gray>",
+            )
+            return
+        }
+
+        val text = Component.text()
+            .append(mini("<gray>Loaded models:</gray>"))
+        for (model in loaded) {
+            text.append(Component.newline())
+                .append(
+                    mini(
+                        "<gray>  <aqua><cheat></aqua> <version> " +
+                            "<dark_gray>(<window>s window, <features> features)</dark_gray></gray>",
+                        Placeholder.unparsed("cheat", model.cheat),
+                        Placeholder.unparsed("version", model.version),
+                        Placeholder.unparsed("window", model.windowSeconds.toString()),
+                        Placeholder.unparsed("features", model.featureCount.toString()),
+                    ),
+                )
+        }
+        sender.sendMessage(text.build())
+    }
+
+    @Command("dill models reload")
+    @Permission("dillway.admin")
+    fun reloadModels(@Sender sender: CommandSender) {
+        if (!plugin.storage.enabled) {
+            sender.sendMini(
+                "<red>Remote storage is disabled in config.yml; " +
+                    "only the local model cache is available.</red>",
+            )
+            return
+        }
+
+        sender.sendMini("<gray>Refreshing models from R2 ...</gray>")
+
+        plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
+            val report = modelManager.refresh()
+            if (!plugin.isEnabled) return@Runnable
+
+            plugin.server.scheduler.runTask(plugin, Runnable {
+                val text = Component.text()
+                    .append(mini("<gray>Model refresh finished.</gray>"))
+
+                for (model in report.loaded) {
+                    text.append(Component.newline())
+                        .append(
+                            mini(
+                                "<green>  <cheat></green> <version> " +
+                                    "<dark_gray>(<window>s window, <features> features)</dark_gray>",
+                                Placeholder.unparsed("cheat", model.cheat),
+                                Placeholder.unparsed("version", model.version),
+                                Placeholder.unparsed("window", model.windowSeconds.toString()),
+                                Placeholder.unparsed("features", model.featureCount.toString()),
+                            ),
+                        )
+                }
+
+                for ((cheat, reason) in report.failed) {
+                    text.append(Component.newline())
+                        .append(
+                            Component.text("  $cheat: $reason", NamedTextColor.RED),
+                        )
+                }
+
+                if (report.loaded.isEmpty()) {
+                    text.append(Component.newline())
+                        .append(
+                            mini("<yellow>No model was loaded; the cached models stay in memory.</yellow>"),
+                        )
+                }
+
+                sender.sendMessage(text.build())
+            })
+        })
+    }
 }

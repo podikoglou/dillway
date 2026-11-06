@@ -26,11 +26,26 @@ class DillCommand(
         @Name("player") target: Player,
     ) {
         if (listener.startRecording(target)) {
-            sender.sendMini(
-                "<green>Recording <yellow><player></yellow>. " +
-                    "Stop with <white>/dill stop <player></white>.</green>",
-                Placeholder.unparsed("player", target.name),
-            )
+            if (sender is Player) {
+                sender.sendMessage(
+                    Component.text()
+                        .append(
+                            mini(
+                                "<green>Recording <yellow><player></yellow>.</green>",
+                                Placeholder.unparsed("player", target.name),
+                            ),
+                        )
+                        .append(separator())
+                        .append(chatButton("[Stop]", "/dill stop ${target.name}"))
+                        .build(),
+                )
+            } else {
+                sender.sendMini(
+                    "<green>Recording <yellow><player></yellow>. " +
+                        "Stop with <white>/dill stop <player></white>.</green>",
+                    Placeholder.unparsed("player", target.name),
+                )
+            }
         } else {
             sender.sendMini(
                 "<red><player> is already being recorded</red>",

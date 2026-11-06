@@ -23,6 +23,8 @@ All require `dillway.admin` (default `op`).
 
 1. `/dill rec <player>` — record whatever the player does, honestly or
    with a cheat client. The recording keeps no label while it runs.
+   Chat shows a clickable **[Stop]** button (consoles get the command
+   name instead).
 2. `/dill stop <player>` — chat shows two clickable steps:
    - **[Run prediction]** runs inference straight away.
    - **[Use as training data]** opens a toggle menu one button per

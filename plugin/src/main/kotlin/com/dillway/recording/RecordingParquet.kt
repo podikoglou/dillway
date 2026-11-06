@@ -1,9 +1,12 @@
 package com.dillway.recording
 
+import dev.hardwood.InputFile
 import dev.hardwood.OutputFile
 import dev.hardwood.metadata.LogicalType
 import dev.hardwood.metadata.PhysicalType
 import dev.hardwood.metadata.RepetitionType
+import dev.hardwood.reader.ParquetFileReader
+import dev.hardwood.reader.RowReader
 import dev.hardwood.schema.FileSchema
 import dev.hardwood.writer.ParquetFileWriter
 import java.io.File
@@ -175,6 +178,110 @@ object RecordingParquet {
      */
     fun writeRecording(output: OutputStream, recording: Recording) =
         writeRecording(OutputStreamOutputFile(output), recording)
+
+    /**
+     * Reads a recording written by [writeRecording].
+     *
+     * The flat schema is self-describing, so the payload kind comes from which
+     * payload column is non-null, not from a hard-coded packet-type list. An
+     * empty file keeps its id and start time from the file name.
+     */
+    fun readRecording(file: File): Recording {
+        ParquetFileReader.open(InputFile.of(file.toPath())).use { reader ->
+            reader.rowReader().use { rows ->
+                var id = 0L
+                var started = 0L
+                var player = ""
+                var label = ""
+                val packets = ArrayList<RecordedPacket>()
+
+                while (rows.hasNext()) {
+                    rows.next()
+                    id = rows.getLong("id")
+                    started = rows.getLong("started")
+                    player = rows.getString("player")
+                    label = rows.getString("recording_type").lowercase(Locale.ROOT)
+                    packets += readPacket(rows)
+                }
+
+                if (packets.isEmpty()) {
+                    // No rows means no header columns either; recover what the
+                    // file name can tell us so the recording still resolves.
+                    id = file.nameWithoutExtension.toLongOrNull() ?: 0L
+                    started = id
+                }
+
+                return Recording(
+                    id = id,
+                    started = started,
+                    player = player,
+                    label = label,
+                    packets = packets,
+                )
+            }
+        }
+    }
+
+    private fun readPacket(rows: RowReader): RecordedPacket {
+        val data = when {
+            !rows.isNull("x") -> MoveData(
+                x = rows.getDouble("x"),
+                y = rows.getDouble("y"),
+                z = rows.getDouble("z"),
+                yaw = rows.getFloat("yaw"),
+                pitch = rows.getFloat("pitch"),
+                onGround = rows.getBoolean("f"),
+                hasPos = rows.getBoolean("hasPos"),
+                hasLook = rows.getBoolean("hasLook"),
+            )
+
+            !rows.isNull("animation_timestamp") ->
+                AnimationData(timestamp = rows.getLong("animation_timestamp"))
+
+            !rows.isNull("itemInHandIndex") ->
+                HeldItemData(itemInHandIndex = rows.getInt("itemInHandIndex"))
+
+            else -> error("recording row has no payload")
+        }
+
+        return RecordedPacket(
+            type = rows.getString("packet_type"),
+            timestamp = rows.getLong("timestamp"),
+            data = data,
+            context = PlayerContext(
+                flySpeed = rows.getFloat("fly_speed"),
+                velocityZ = rows.getDouble("velocity_z"),
+                locationX = rows.getDouble("location_x"),
+                locationY = rows.getDouble("location_y"),
+                locationDirectionY = rows.getDouble("location_direction_y"),
+                locationDirectionX = rows.getDouble("location_direction_x"),
+                velocityX = rows.getDouble("velocity_x"),
+                velocityY = rows.getDouble("velocity_y"),
+                saturation = rows.getFloat("saturation"),
+                locationDirectionZ = rows.getDouble("location_direction_z"),
+                locationZ = rows.getDouble("location_z"),
+                foodLevel = rows.getInt("food_level"),
+                eyeLocationYaw = rows.getFloat("eye_location_yaw"),
+                walkSpeed = rows.getFloat("walk_speed"),
+                eyeHeight = rows.getDouble("eye_height"),
+                allowFlight = rows.getBoolean("allow_flight"),
+                exhaustion = rows.getFloat("exhaustion"),
+                health = rows.getDouble("health"),
+                eyeLocationPitch = rows.getFloat("eye_location_pitch"),
+                locationPitch = rows.getFloat("location_pitch"),
+                fallDistance = rows.getFloat("fall_distance"),
+                locationYaw = rows.getFloat("location_yaw"),
+                healthScale = rows.getDouble("health_scale"),
+                sprinting = rows.getBoolean("sprinting"),
+                eyeLocationY = rows.getDouble("eye_location_y"),
+                eyeLocationX = rows.getDouble("eye_location_x"),
+                flying = rows.getBoolean("flying"),
+                eyeLocationZ = rows.getDouble("eye_location_z"),
+                sneaking = rows.getBoolean("sneaking"),
+                onGround = rows.getBoolean("on_ground"),
+            ),
+        )
+    }
 }
 
 /**

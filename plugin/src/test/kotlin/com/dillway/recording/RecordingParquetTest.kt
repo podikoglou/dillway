@@ -105,6 +105,16 @@ class RecordingParquetTest {
         }
     }
 
+    @Test
+    fun `recording survives a write and read round trip`() {
+        val dir = Files.createTempDirectory("dillway-round-trip")
+        val file = dir.resolve("${recording.id}.parquet").toFile()
+
+        RecordingParquet.writeRecording(file, recording)
+
+        assertEquals(recording, RecordingParquet.readRecording(file))
+    }
+
     /**
      * The only part of the stream path that is ours is the adapter in
      * `RecordingParquet`, so this test locks just the passthrough: the bytes

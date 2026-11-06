@@ -14,7 +14,7 @@ watch:
   # How often a watched player is predicted on.
   interval-seconds: 5
   # Where the live state shows up. `actionbar` writes it above the hotbar and
-  # keeps chat for verdict changes; `chat` prints the full report on a change
+  # leaves chat alone; `chat` prints the full report when a verdict changes
   # instead. A console always uses `chat`: it has no hotbar.
   display: actionbar
 

@@ -119,6 +119,7 @@ class WatchService(private val plugin: DillPlugin) {
             display = display(sender),
         )
         byPlayer[player.uniqueId] = watch
+        plugin.metrics.watchStarted()
 
         val ticks = (watch.intervalMs / 50L).coerceAtLeast(1L)
         watch.task = plugin.server.scheduler.runTaskTimer(
@@ -198,7 +199,7 @@ class WatchService(private val plugin: DillPlugin) {
         )
         predictions.forEach { (name, report) ->
             sender.sendMessage(
-                PredictionView.render("Watch", name, report, threshold()),
+                PredictionView.render("Watch", name, report, plugin.threshold()),
             )
         }
     }
@@ -224,7 +225,7 @@ class WatchService(private val plugin: DillPlugin) {
         }
 
         sender.sendMessage(
-            PredictionView.render("Watch", watch.playerName, report, threshold()),
+            PredictionView.render("Watch", watch.playerName, report, plugin.threshold()),
         )
     }
 
@@ -293,7 +294,7 @@ class WatchService(private val plugin: DillPlugin) {
 
         plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
             val report = try {
-                plugin.models.infer(recording)
+                plugin.models.infer(recording, plugin.threshold())
             } catch (e: Exception) {
                 plugin.logger.severe(
                     "Watch inference failed for ${watch.playerName}: " +
@@ -310,7 +311,7 @@ class WatchService(private val plugin: DillPlugin) {
 
                 watch.toldIdle = false
                 watch.lastReport = report
-                val threshold = threshold()
+                val threshold = plugin.threshold()
 
                 // The bar is a live view, not an event log: it changes every
                 // interval and never touches chat.
@@ -356,8 +357,6 @@ class WatchService(private val plugin: DillPlugin) {
         val configured = plugin.config.getString("watch.display", "actionbar")
         return if (configured.equals("chat", ignoreCase = true)) Display.CHAT else Display.ACTION_BAR
     }
-
-    private fun threshold(): Double = plugin.config.getDouble("prediction.threshold", 0.5)
 
     /** Starts the controller's bar timer, if it does not run already. */
     private fun ensureBar(watch: Watch) {

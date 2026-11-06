@@ -115,6 +115,18 @@ class RecordingParquetTest {
         assertEquals(recording, RecordingParquet.readRecording(file))
     }
 
+    @Test
+    fun `empty recording keeps its id from the file name`() {
+        val dir = Files.createTempDirectory("dillway-empty")
+        val file = dir.resolve("${recording.id}.parquet").toFile()
+
+        RecordingParquet.writeRecording(file, recording.copy(packets = emptyList()))
+
+        val read = RecordingParquet.readRecording(file)
+        assertEquals(recording.id, read.id)
+        assertTrue(read.packets.isEmpty())
+    }
+
     /**
      * The only part of the stream path that is ours is the adapter in
      * `RecordingParquet`, so this test locks just the passthrough: the bytes

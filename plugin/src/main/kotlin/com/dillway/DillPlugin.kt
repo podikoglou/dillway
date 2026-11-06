@@ -15,6 +15,7 @@ class DillPlugin : JavaPlugin() {
     val models = ModelManager(this)
     val recordings = RecordingStore(this)
     val flow = RecordingFlow(this)
+    val kit = RecordingKit(this, listener, flow)
 
     /** Cheats the admin can label, from config; models add themselves. */
     val cheatNames: List<String>
@@ -55,13 +56,14 @@ class DillPlugin : JavaPlugin() {
         }
 
         server.pluginManager.registerEvents(listener, this)
+        server.pluginManager.registerEvents(kit, this)
 
         Blade.forPlatform(BladePaperPlatform(this))
             .config { config ->
                 config.defaultPermissionMessage("You don't have permission to use this command.")
             }
             .build()
-            .register(DillCommand(this, listener, flow, models))
+            .register(DillCommand(this, listener, flow, models, kit))
     }
 
     override fun onDisable() {

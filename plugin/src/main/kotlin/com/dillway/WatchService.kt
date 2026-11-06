@@ -154,18 +154,29 @@ class WatchService(private val plugin: DillPlugin) {
         )
     }
 
-    /** A watched player left, so there is nothing left to predict on. */
+    /**
+     * Ends watches on a player who left, and watches controlled by an admin
+     * who left: their reports would have nowhere to go.
+     */
     fun playerQuit(player: Player) {
-        val watch = byPlayer[player.uniqueId] ?: return
-        remove(watch)
-        notify(
-            watch,
-            mini(
-                "<gray>Stopped watching <yellow><player></yellow> " +
-                    "<dark_gray>·</dark_gray> the player left.</gray>",
-                Placeholder.unparsed("player", watch.playerName),
-            ),
-        )
+        val affected = byPlayer.values.filter { watch ->
+            watch.playerId == player.uniqueId ||
+                (watch.controller as? Player)?.uniqueId == player.uniqueId
+        }
+
+        for (watch in affected) {
+            remove(watch)
+            if (watch.playerId == player.uniqueId) {
+                notify(
+                    watch,
+                    mini(
+                        "<gray>Stopped watching <yellow><player></yellow> " +
+                            "<dark_gray>·</dark_gray> the player left.</gray>",
+                        Placeholder.unparsed("player", watch.playerName),
+                    ),
+                )
+            }
+        }
     }
 
     /** Cancels every tick on shutdown; buffers are discarded. */

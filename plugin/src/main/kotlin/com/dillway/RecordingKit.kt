@@ -102,9 +102,9 @@ class RecordingKit(
         stack.editMeta { meta ->
             meta.displayName(
                 if (recording) {
-                    mini("<red><b>Recording</b></red>")
+                    mini("<red><!italic><b>Recording</b></red>")
                 } else {
-                    mini("<green><b>Record</b></green>")
+                    mini("<green><!italic><b>Record</b></green>")
                 },
             )
             meta.lore(

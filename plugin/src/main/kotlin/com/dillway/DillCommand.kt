@@ -19,9 +19,9 @@ class DillCommand(
     private val modelManager: ModelManager,
 ) {
 
-    @Command("dill rec")
+    @Command("dill rec start")
     @Permission("dillway.admin")
-    fun rec(
+    fun start(
         @Sender sender: CommandSender,
         @Name("player") target: Player,
     ) {
@@ -37,14 +37,14 @@ class DillCommand(
                         )
                         .append(separator())
                         .append(
-                            chatButton("[Stop]", "/dill stop ${target.name}", NamedTextColor.GRAY),
+                            chatButton("[Stop]", "/dill rec stop ${target.name}", NamedTextColor.GRAY),
                         )
                         .build(),
                 )
             } else {
                 sender.sendMini(
                     "<green>Recording <yellow><player></yellow>. " +
-                        "Stop with <white>/dill stop <player></white>.</green>",
+                        "Stop with <white>/dill rec stop <player></white>.</green>",
                     Placeholder.unparsed("player", target.name),
                 )
             }
@@ -56,7 +56,7 @@ class DillCommand(
         }
     }
 
-    @Command("dill stop")
+    @Command("dill rec stop")
     @Permission("dillway.admin")
     fun stop(
         @Sender sender: CommandSender,
@@ -73,7 +73,7 @@ class DillCommand(
         }
     }
 
-    @Command("dill train")
+    @Command("dill rec train")
     @Permission("dillway.admin")
     fun train(@Sender sender: CommandSender) {
         flow.train(sender)
@@ -94,13 +94,13 @@ class DillCommand(
         flow.save(sender)
     }
 
-    @Command("dill predict")
+    @Command("dill rec predict")
     @Permission("dillway.admin")
     fun predict(@Sender sender: CommandSender) {
         flow.predict(sender)
     }
 
-    @Command("dill discard")
+    @Command("dill rec discard")
     @Permission("dillway.admin")
     fun discard(@Sender sender: CommandSender) {
         flow.discard(sender)

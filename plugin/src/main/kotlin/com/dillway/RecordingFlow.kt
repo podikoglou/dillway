@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * The admin-facing lifecycle of a stopped recording.
  *
- * `/dill stop` detaches the session and offers three actions in chat:
+ * `/dill rec stop` detaches the session and offers three actions in chat:
  * label it as training data, run inference, or discard it. A recording waits
  * in memory until the admin picks one. Chat buttons run the same commands an
  * admin can type, so the flow also works from the console.
@@ -54,16 +54,17 @@ class RecordingFlow(
             .append(Component.newline())
 
         if (sender is Player) {
-            text.append(chatButton("[Train]", "/dill train", NamedTextColor.GREEN))
+            text.append(chatButton("[Train]", "/dill rec train", NamedTextColor.GREEN))
                 .append(separator())
-                .append(chatButton("[Predict]", "/dill predict", NamedTextColor.AQUA))
+                .append(chatButton("[Predict]", "/dill rec predict", NamedTextColor.AQUA))
                 .append(separator())
-                .append(chatButton("[Discard]", "/dill discard", NamedTextColor.RED))
+                .append(chatButton("[Discard]", "/dill rec discard", NamedTextColor.RED))
         } else {
             text.append(
                 mini(
-                    "<gray>Run <white>/dill train</white>, <white>/dill predict</white> " +
-                        "or <white>/dill discard</white>.",
+                    "<gray>Run <white>/dill rec train</white>, " +
+                        "<white>/dill rec predict</white> " +
+                        "or <white>/dill rec discard</white>.",
                 ),
             )
         }
@@ -256,7 +257,7 @@ class RecordingFlow(
         text.append(Component.newline())
             .append(chatButton("[Done]", "/dill save"))
             .append(separator())
-            .append(chatButton("[Discard]", "/dill discard", NamedTextColor.RED))
+            .append(chatButton("[Discard]", "/dill rec discard", NamedTextColor.RED))
 
         sender.sendMessage(text.build())
     }
@@ -339,7 +340,8 @@ class RecordingFlow(
     private fun noPending(sender: CommandSender) {
         sender.sendMini(
             "<red>No stopped recording is waiting. Start one with " +
-                "<white>/dill rec</white> and stop it with <white>/dill stop</white>.</red>",
+                "<white>/dill rec start</white> and stop it with " +
+                "<white>/dill rec stop</white>.</red>",
         )
     }
 

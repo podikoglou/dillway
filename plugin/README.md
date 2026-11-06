@@ -23,17 +23,17 @@ All require `dillway.admin` (default `op`).
 
 1. `/dill rec <player>` — record whatever the player does, honestly or
    with a cheat client. The recording keeps no label while it runs.
-   Chat shows a clickable **[Stop]** button (consoles get the command
+   Chat shows a clickable `[Stop]` button (consoles get the command
    name instead).
 2. `/dill stop <player>` — chat shows two clickable steps:
-   - **[Run prediction]** runs inference straight away.
-   - **[Use as training data]** opens a toggle menu one button per
+   - `[Run prediction]` runs inference straight away.
+   - `[Use as training data]` opens a toggle menu one button per
        cheat plus `legit`; a recording with two cheats becomes a positive
-       for both, `legit` is exclusive. **[Done]** writes one parquet per
+       for both, `legit` is exclusive. `[Done]` writes one parquet per
        selected label under `plugins/Dillway/<label>/` and pushes each to
        `s3://<bucket>/<key-prefix>/<label>/<started>.parquet` once the
        upload succeeds (the local copy is then removed, kept on failure).
-   - **[Discard]** drops it.
+   - `[Discard]` drops it.
 3. A waiting recording lives in memory until the admin resolves it, and is
    re-shown on every click. Consoles get command names instead of clickable
    buttons; everything works by typing the commands.

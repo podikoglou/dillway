@@ -29,7 +29,7 @@ An AI-powered Minecraft anti-cheat system.
    `/dill models reload`), verifies its SHA-256, and caches it under
    `plugins/Dillway/models/`.
 3. An admin records a player with `/dill rec <name>`, stops with
-   `/dill stop <name>`, and picks **Run prediction**. The plugin slices
+   `/dill stop <name>`, and picks `Run prediction`. The plugin slices
    the recording with the model's own window seconds, rebuilds the
    summary-stat features in Kotlin (parity-tested against `features.py`),
    and runs every specialist in-process on an async thread.

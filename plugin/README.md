@@ -29,9 +29,16 @@ All admin commands require `dillway.admin` (default `op`). Run
 
 `/dill watch <player>` predicts on a player while they play, instead of on
 a recording that has already stopped. The buffer holds only the last window
-of play, so the numbers track the current behaviour. Clear play stays quiet:
-chat output appears only when a model reaches the configured threshold. A
-watch writes nothing to disk and ends when the player leaves, on
+of play, so the numbers track the current behaviour.
+
+The live state is written above the hotbar, where it overwrites itself, so a
+steady verdict sends no chat messages. Chat carries one line only when the
+set of flagged models changes; the `[Report]` button and `/dill watch stop`
+print the full report. Consoles have no action bar, so they get the full
+report on a change instead. `watch.display` in the config selects chat-only
+mode.
+
+A watch writes nothing to disk and ends when the player leaves, on
 `/dill watch stop`, or at shutdown. A player cannot be recorded and watched
 at the same time: stop the other mode first.
 

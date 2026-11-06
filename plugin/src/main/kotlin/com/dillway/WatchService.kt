@@ -92,11 +92,8 @@ class WatchService(private val plugin: DillPlugin) {
 
         val text = Component.text().append(
             mini(
-                "<gray>Watching <yellow><player></yellow> " +
-                    "<dark_gray>·</dark_gray> a prediction every <aqua><interval>s</aqua> " +
-                    "of play <dark_gray>·</dark_gray> chat shows flags only</gray>",
+                "<gray>Watching <yellow><player></yellow>.</gray>",
                 Placeholder.unparsed("player", player.name),
-                Placeholder.unparsed("interval", number(interval)),
             ),
         )
         if (sender is Player) {
@@ -170,8 +167,7 @@ class WatchService(private val plugin: DillPlugin) {
                 notify(
                     watch,
                     mini(
-                        "<gray>Stopped watching <yellow><player></yellow> " +
-                            "<dark_gray>·</dark_gray> the player left.</gray>",
+                        "<gray><player> left. Watch stopped.</gray>",
                         Placeholder.unparsed("player", watch.playerName),
                     ),
                 )

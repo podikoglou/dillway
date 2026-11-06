@@ -43,7 +43,7 @@ any other directory must match the `--cheat` name being trained.
 R2 bucket: dillway ──► Modal job ──► artifacts back to dillway
  recordings/<type>/    │  load →   models/<cheat>/<ver>/model.onnx
    *.parquet           │  window →                     manifest.json
-                       │  features
+                       │  features              models/<cheat>/latest.json
                        │  GroupKFold CV (group = player UUID)
                        │  RandomForest fit
                        │  skl2onnx compile + parity check
@@ -64,6 +64,7 @@ src/dw_engine/
   dataset.py    recording glob + window slicing
   model.py      RandomForest specialist + grouped CV + FP/hour gate
   export.py     skl2onnx compile, metadata, onnxruntime parity check
+  registry.py   version layout, checksums, latest.json resolution
   train.py      orchestration; also usable locally without Modal
   app.py        Modal app: R2 bucket mounts + train_specialist
 scripts/        converter for the older JSON recordings
@@ -151,8 +152,40 @@ uv run python -m dw_engine.train --cheat speed
 ## Artifacts
 
 `models/<cheat>/<version>/{model.onnx,manifest.json}` on the models
-bucket, where `<version>` is the UTC timestamp of the training run
-(e.g. `20261106T002143Z`).
+bucket, where `<version>` is the UTC timestamp of the training run plus
+a short random suffix (e.g. `20261106T015336Z-a1b2c3`). The suffix stops
+two runs that start in the same second from writing into the same
+directory, and the timestamp prefix keeps versions sortable.
+
+`models/<cheat>/latest.json` names the current version. It is the file to
+read when you need to know which model is live; it carries the artifact
+key, byte size, SHA-256, window size, dataset composition and validation
+metrics, so a consumer needs no other object.
+
+### Which version is latest
+
+The version listing is the source of truth: the newest directory that
+contains both `model.onnx` and `manifest.json` (written last, so it marks
+a finished export). `latest.json` is a cache in front of that. Resolution
+re-reads the listing and verifies the checksum, and repairs the pointer
+when it is missing, stale, or names a damaged artifact. If the newest
+artifact fails verification, resolution warns and falls back to the
+newest artifact that does verify.
+
+Concurrent training runs are safe without locks:
+
+- each run writes only its own version directory, and version directories
+  are never rewritten;
+- `latest.json` is published through the same resolution logic, so an
+  older run finishing last still points at the newest verified version;
+- the worst case is a pointer that briefly names a valid older version;
+  the next resolution repairs it.
+
+To inspect or repair a local models directory:
+
+```sh
+uv run python -m dw_engine.registry --models-dir target --cheat speed
+```
 
 ### model.onnx
 
@@ -171,8 +204,9 @@ without out-of-band config.
 Everything the model artifact should travel with: feature list and
 count, label order, window size, dataset composition (players,
 recordings, windows — overall and per label), the grouped-CV validation
-metrics, framework/converter versions, and the onnxruntime-vs-sklearn
-parity error at export time (typically ~1e-6).
+metrics, framework/converter versions, the onnxruntime-vs-sklearn parity
+error at export time (typically ~1e-6), and the SHA-256 of the exported
+`model.onnx`, which is what the latest pointer verifies against.
 
 ## Converting the older JSON dataset
 

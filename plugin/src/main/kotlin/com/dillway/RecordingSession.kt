@@ -19,3 +19,10 @@ data class StoppedRecording(
     val playerName: String,
     val session: RecordingSession,
 )
+
+/** Why `/dill rec start` did or did not open a session. */
+enum class RecordingStart {
+    STARTED,
+    ALREADY_RECORDING,
+    ALREADY_WATCHED,
+}

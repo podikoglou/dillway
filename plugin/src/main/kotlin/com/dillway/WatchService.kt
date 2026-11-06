@@ -16,11 +16,11 @@ import kotlin.math.roundToLong
  * Live predictions for one player.
  *
  * Packets arrive through `DillListener`, the same pipeline that feeds
- * recordings, so a watch and a recording can capture the same player at once.
- * A repeating task takes a rolling tail of the buffer — long enough for the
- * longest loaded window — and runs the specialists off the main thread. A
- * watch is ephemeral: it writes nothing to disk and is dropped on quit,
- * `/dill watch stop`, or shutdown.
+ * recordings. A player cannot be recorded and watched at the same time, so
+ * the two modes never share a player. A repeating task takes a rolling tail
+ * of the buffer — long enough for the longest loaded window — and runs the
+ * specialists off the main thread. A watch is ephemeral: it writes nothing
+ * to disk and is dropped on quit, `/dill watch stop`, or shutdown.
  *
  * Main thread only, except for the inference call and the hop back with the
  * result.
@@ -59,6 +59,13 @@ class WatchService(private val plugin: DillPlugin) {
         if (byPlayer.containsKey(player.uniqueId)) {
             sender.sendMini(
                 "<red><player> is already being watched.</red>",
+                Placeholder.unparsed("player", player.name),
+            )
+            return
+        }
+        if (plugin.isRecording(player)) {
+            sender.sendMini(
+                "<red><player> is being recorded. Stop the recording first.</red>",
                 Placeholder.unparsed("player", player.name),
             )
             return

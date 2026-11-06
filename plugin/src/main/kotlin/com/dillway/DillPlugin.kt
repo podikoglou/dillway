@@ -3,6 +3,7 @@ package com.dillway
 import com.dillway.model.ModelManager
 import me.vaperion.blade.Blade
 import me.vaperion.blade.paper.BladePaperPlatform
+import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 
 class DillPlugin : JavaPlugin() {
@@ -24,6 +25,9 @@ class DillPlugin : JavaPlugin() {
     /** Labels offered by the stop flow: `legit` first, then every known cheat. */
     fun availableLabels(): List<String> =
         listOf(Labels.LEGIT) + (cheatNames + models.knownCheats()).distinct().sorted()
+
+    /** True when a recording session holds this player's packets. */
+    fun isRecording(player: Player): Boolean = listener.isRecording(player)
 
     override fun onEnable() {
         saveDefaultConfig()

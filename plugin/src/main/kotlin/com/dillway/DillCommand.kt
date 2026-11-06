@@ -26,32 +26,45 @@ class DillCommand(
         @Sender sender: CommandSender,
         @Name("player") target: Player,
     ) {
-        if (listener.startRecording(target)) {
-            if (sender is Player) {
-                sender.sendMessage(
-                    Component.text()
-                        .append(
-                            mini(
-                                "<green>Recording <yellow><player></yellow>.</green>",
-                                Placeholder.unparsed("player", target.name),
-                            ),
-                        )
-                        .append(separator())
-                        .append(
-                            chatButton("[Stop]", "/dill rec stop ${target.name}", NamedTextColor.GRAY),
-                        )
-                        .build(),
-                )
-            } else {
+        when (listener.startRecording(target)) {
+            RecordingStart.ALREADY_RECORDING -> {
                 sender.sendMini(
-                    "<green>Recording <yellow><player></yellow>. " +
-                        "Stop with <white>/dill rec stop <player></white>.</green>",
+                    "<red><player> is already being recorded</red>",
                     Placeholder.unparsed("player", target.name),
                 )
+                return
             }
+
+            RecordingStart.ALREADY_WATCHED -> {
+                sender.sendMini(
+                    "<red><player> is being watched. Stop the watch first.</red>",
+                    Placeholder.unparsed("player", target.name),
+                )
+                return
+            }
+
+            RecordingStart.STARTED -> Unit
+        }
+
+        if (sender is Player) {
+            sender.sendMessage(
+                Component.text()
+                    .append(
+                        mini(
+                            "<green>Recording <yellow><player></yellow>.</green>",
+                            Placeholder.unparsed("player", target.name),
+                        ),
+                    )
+                    .append(separator())
+                    .append(
+                        chatButton("[Stop]", "/dill rec stop ${target.name}", NamedTextColor.GRAY),
+                    )
+                    .build(),
+            )
         } else {
             sender.sendMini(
-                "<red><player> is already being recorded</red>",
+                "<green>Recording <yellow><player></yellow>. " +
+                    "Stop with <white>/dill rec stop <player></white>.</green>",
                 Placeholder.unparsed("player", target.name),
             )
         }

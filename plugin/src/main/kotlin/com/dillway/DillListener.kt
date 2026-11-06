@@ -31,10 +31,11 @@ class DillListener(
     // Public API
     // -------------------------------------------------------------------------
 
-    fun startRecording(player: Player): Boolean {
-        if (sessions.containsKey(player.uniqueId)) return false
+    fun startRecording(player: Player): RecordingStart {
+        if (sessions.containsKey(player.uniqueId)) return RecordingStart.ALREADY_RECORDING
+        if (watches.isWatching(player.uniqueId)) return RecordingStart.ALREADY_WATCHED
         sessions[player.uniqueId] = RecordingSession(player.uniqueId)
-        return true
+        return RecordingStart.STARTED
     }
 
     /**

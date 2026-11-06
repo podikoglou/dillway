@@ -58,6 +58,14 @@ class RecordingKit(
         if (event.action != Action.RIGHT_CLICK_AIR && event.action != Action.RIGHT_CLICK_BLOCK) return
         if (stateOf(event.item) == null) return
         if (event.useItemInHand() == Event.Result.DENY) return
+        // One block click sends both a use-item-on and a use-item packet. The
+        // second one arrives as a block event with the block use already
+        // denied; only the first is the real click.
+        if (event.action == Action.RIGHT_CLICK_BLOCK &&
+            event.useInteractedBlock() == Event.Result.DENY
+        ) {
+            return
+        }
 
         // The kit is a tool, not a dye: no block placement or item use.
         event.isCancelled = true

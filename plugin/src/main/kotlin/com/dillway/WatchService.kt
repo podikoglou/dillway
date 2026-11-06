@@ -76,6 +76,9 @@ class WatchService(private val plugin: DillPlugin) {
 
     fun isWatching(playerId: UUID): Boolean = playerId in byPlayer
 
+    /** Number of players with a live watch. */
+    fun activeCount(): Int = byPlayer.size
+
     /** Mirrors one captured packet into the watch buffer, when one exists. */
     fun capture(playerId: UUID, packet: RecordedPacket) {
         byPlayer[playerId]?.packets?.addLast(packet)

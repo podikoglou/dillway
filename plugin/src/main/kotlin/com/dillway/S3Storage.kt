@@ -84,7 +84,11 @@ class S3Storage(private val plugin: DillPlugin) {
                 )
                 .httpClient(UrlConnectionHttpClient.create())
                 .build()
-            true
+        plugin.logger.info(
+            "Recording uploads go to s3://$bucket/${recordingKey("*", "...")}, " +
+                "models are read from s3://$bucket/$modelsKeyPrefix/",
+        )
+        true
         } catch (e: IllegalArgumentException) {
             plugin.logger.severe("Invalid s3 config: ${e.message}")
             source = null

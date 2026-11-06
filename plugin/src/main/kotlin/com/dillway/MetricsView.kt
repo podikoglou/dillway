@@ -19,7 +19,7 @@ object MetricsView {
             .append(
                 mini(
                     "<gray>Dillway metrics <dark_gray>·</dark_gray> up <uptime></gray>",
-                    Placeholder.unparsed("uptime", uptime(snapshot.uptimeNanos)),
+                    Placeholder.unparsed("uptime", MetricFormat.uptime(snapshot.uptimeNanos)),
                 ),
             )
 
@@ -39,9 +39,9 @@ object MetricsView {
             line(
                 "Inference",
                 fact("${count(snapshot.inferenceRuns)} runs"),
-                fact("avg ${millis(averageInference(snapshot))}"),
-                fact("max ${millis(snapshot.inferenceNanosMax)}"),
-                fact("last ${millis(snapshot.inferenceNanosLast)}"),
+                fact("avg ${MetricFormat.millis(averageInference(snapshot))}"),
+                fact("max ${MetricFormat.millis(snapshot.inferenceNanosMax)}"),
+                fact("last ${MetricFormat.millis(snapshot.inferenceNanosLast)}"),
                 fact("${count(snapshot.windowsScored)} windows"),
                 fact("${count(snapshot.flaggedVerdicts)} flagged", flaggedColor(snapshot)),
                 failures(snapshot.inferenceFailures),
@@ -60,7 +60,7 @@ object MetricsView {
             line(
                 "Storage",
                 fact("${count(snapshot.uploads)} uploads"),
-                fact(bytes(snapshot.bytesUploaded)),
+                fact(MetricFormat.bytes(snapshot.bytesUploaded)),
                 failures(snapshot.uploadFailures),
             ),
         )
@@ -107,8 +107,13 @@ object MetricsView {
     private fun flaggedColor(snapshot: MetricsSnapshot): NamedTextColor =
         if (snapshot.flaggedVerdicts > 0) NamedTextColor.RED else NamedTextColor.DARK_GRAY
 
+}
+
+/** Number formatting shared by the metrics view. */
+internal object MetricFormat {
+
     /** Compact uptime: the two largest units are enough. */
-    private fun uptime(nanos: Long): String {
+    fun uptime(nanos: Long): String {
         val seconds = (nanos / 1_000_000_000L).coerceAtLeast(0)
         val days = seconds / 86_400
         val hours = (seconds % 86_400) / 3_600
@@ -121,10 +126,10 @@ object MetricsView {
         }
     }
 
-    private fun millis(nanos: Long): String =
+    fun millis(nanos: Long): String =
         String.format(Locale.ROOT, "%.0f ms", nanos / 1_000_000.0)
 
-    private fun bytes(value: Long): String {
+    fun bytes(value: Long): String {
         if (value < 1024) return "$value B"
         val units = listOf("KB", "MB", "GB", "TB")
         var amount = value.toDouble()

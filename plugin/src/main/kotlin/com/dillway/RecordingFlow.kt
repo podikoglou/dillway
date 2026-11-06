@@ -61,7 +61,7 @@ class RecordingFlow(private val plugin: DillPlugin) {
             val recording = plugin.recordings.load(id)
             val report = recording?.let {
                 try {
-                    plugin.models.infer(it)
+                    plugin.models.infer(it, plugin.threshold())
                 } catch (e: Exception) {
                     plugin.logger.severe("Inference failed for $id: ${e.message}")
                     null
@@ -80,7 +80,7 @@ class RecordingFlow(private val plugin: DillPlugin) {
                             kind = "Prediction",
                             subject = id.toString(),
                             report = report,
-                            threshold = threshold(),
+                            threshold = plugin.threshold(),
                         ),
                     )
                 }
@@ -199,6 +199,7 @@ class RecordingFlow(private val plugin: DillPlugin) {
     fun discard(sender: CommandSender, id: Long) {
         if (!plugin.recordings.exists(id)) return unknown(sender, id)
         plugin.recordings.remove(id)
+        plugin.metrics.recordingDiscarded()
         selections.remove(id)
         sender.sendMini(
             "<gray>Removed <aqua><id></aqua>.</gray>",
@@ -349,8 +350,6 @@ class RecordingFlow(private val plugin: DillPlugin) {
             "<red>No models are loaded. Run <white>/dill models reload</white>.</red>",
         )
     }
-
-    private fun threshold(): Double = plugin.config.getDouble("prediction.threshold", 0.5)
 
     private fun sync(sender: CommandSender, action: () -> Unit) {
         if (!plugin.isEnabled) return

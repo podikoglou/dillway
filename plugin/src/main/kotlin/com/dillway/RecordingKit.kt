@@ -3,6 +3,7 @@ package com.dillway
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
 import org.bukkit.entity.Player
+import org.bukkit.event.Event
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.block.Action
@@ -48,11 +49,15 @@ class RecordingKit(
         player.sendMini("<gray>Kit given. Right-click it to record yourself.</gray>")
     }
 
-    @EventHandler(ignoreCancelled = true)
+    // No ignoreCancelled: Paper fires a right-click on air as cancelled,
+    // because the server predicts that nothing will happen. The item-use
+    // result tells a real denial from that prediction.
+    @EventHandler
     fun onInteract(event: PlayerInteractEvent) {
         if (event.hand != EquipmentSlot.HAND) return
         if (event.action != Action.RIGHT_CLICK_AIR && event.action != Action.RIGHT_CLICK_BLOCK) return
         if (stateOf(event.item) == null) return
+        if (event.useItemInHand() == Event.Result.DENY) return
 
         // The kit is a tool, not a dye: no block placement or item use.
         event.isCancelled = true

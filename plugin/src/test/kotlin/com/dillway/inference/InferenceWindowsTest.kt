@@ -35,7 +35,7 @@ class InferenceWindowsTest {
 
     @Test
     fun `non-movement packets stay inside their window`() {
-        val movement = (0..80).map { i -> packet(i * 50L) }
+        val movement = (0..160).map { i -> packet(i * 50L) }
         val animation = RecordedPacket(
             type = "PacketPlayInArmAnimation",
             timestamp = 3550,

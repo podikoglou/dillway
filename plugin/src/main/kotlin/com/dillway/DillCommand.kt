@@ -180,10 +180,23 @@ class DillCommand(
         flow.discard(sender, id)
     }
 
+    /** Prints the in-memory counters: capture, inference, uploads and refreshes. */
+    @Command("dill metrics")
+    @Permission("dillway.admin")
+    fun metrics(@Sender sender: CommandSender) {
+        sender.sendMessage(
+            MetricsView.render(
+                plugin.metrics.snapshot(
+                    recordingsActive = plugin.activeRecordings(),
+                    watchesActive = plugin.watches.activeCount(),
+                ),
+            ),
+        )
+    }
+
     @Command("dill models")
     @Permission("dillway.admin")
-    fun models(@Sender sender: CommandSender) {
-        val loaded = modelManager.summary()
+    fun models(@Sender sender: CommandSender) {        val loaded = modelManager.summary()
         if (loaded.isEmpty()) {
             sender.sendMini(
                 "<gray>No models loaded <dark_gray>·</dark_gray> " +

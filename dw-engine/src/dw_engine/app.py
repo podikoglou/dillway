@@ -19,7 +19,7 @@ from pathlib import Path
 
 import modal
 
-from . import config, train
+from dw_engine import config, train
 
 IMAGE = modal.Image.debian_slim(python_version="3.12").uv_pip_install(
     "numpy==2.5.4",

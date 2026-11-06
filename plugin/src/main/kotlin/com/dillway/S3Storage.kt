@@ -8,7 +8,9 @@ import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.S3Configuration
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
@@ -191,6 +193,46 @@ class S3Storage(private val plugin: DillPlugin) {
             Files.deleteIfExists(target)
             plugin.logger.warning("Could not write $key to $target: ${e.message}")
             false
+        }
+    }
+
+    /**
+     * Label directories that hold a recording with [fileName]. Only labels
+     * that contain the object are returned, so a download does not follow.
+     */
+    fun labelsContaining(fileName: String): List<String> {
+        if (source == null) return emptyList()
+        return listCommonPrefixes(keyPrefix)
+            .filter { exists(recordingKey(it, fileName)) }
+            .sorted()
+    }
+
+    /** True when [key] exists. False when storage is off or the object is absent. */
+    fun exists(key: String): Boolean {
+        val s3 = source ?: return false
+        return try {
+            s3.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build())
+            true
+        } catch (e: NoSuchKeyException) {
+            false
+        } catch (e: S3Exception) {
+            if (e.statusCode() == 404) {
+                false
+            } else {
+                plugin.logger.warning("Could not check $key: ${e.message}")
+                false
+            }
+        }
+    }
+
+    /** Deletes [key]. A missing object is not an error. */
+    fun delete(key: String) {
+        val s3 = source ?: return
+        try {
+            s3.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build())
+            plugin.logger.info("Deleted $key")
+        } catch (e: S3Exception) {
+            plugin.logger.warning("Could not delete $key: ${e.message}")
         }
     }
 

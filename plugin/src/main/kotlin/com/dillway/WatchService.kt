@@ -242,7 +242,7 @@ class WatchService(private val plugin: DillPlugin) {
                     watch,
                     PredictionView.render(
                         kind = "Watch",
-                        playerName = watch.playerName,
+                        subject = watch.playerName,
                         report = report,
                         threshold = threshold,
                     ),

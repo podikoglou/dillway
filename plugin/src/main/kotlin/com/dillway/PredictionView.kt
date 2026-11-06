@@ -23,7 +23,7 @@ object PredictionView {
 
     fun render(
         kind: String,
-        playerName: String,
+        subject: String,
         report: InferenceReport,
         threshold: Double,
     ): Component {
@@ -37,11 +37,11 @@ object PredictionView {
         val text = Component.text()
             .append(
                 mini(
-                    "<gray><kind> <dark_gray>·</dark_gray> <yellow><player></yellow> " +
+                    "<gray><kind> <dark_gray>·</dark_gray> <yellow><subject></yellow> " +
                         "<dark_gray>·</dark_gray> <aqua><packets></aqua> packets " +
                         "<dark_gray>·</dark_gray> <aqua><models></aqua> models</gray>",
                     Placeholder.unparsed("kind", kind),
-                    Placeholder.unparsed("player", playerName),
+                    Placeholder.unparsed("subject", subject),
                     Placeholder.unparsed("packets", count(report.movementPackets)),
                     Placeholder.unparsed("models", report.modelCount.toString()),
                 ),

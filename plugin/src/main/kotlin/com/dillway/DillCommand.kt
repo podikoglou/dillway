@@ -83,29 +83,28 @@ class DillCommand(
                 Placeholder.unparsed("player", target.name),
             )
         } else {
-            flow.offer(sender, stopped)
+            flow.stopped(sender, stopped)
         }
-    }
-
-    @Command("dill rec train")
-    @Permission("dillway.admin")
-    fun train(@Sender sender: CommandSender) {
-        flow.train(sender)
     }
 
     @Command("dill rec label")
     @Permission("dillway.admin")
     fun label(
         @Sender sender: CommandSender,
-        @Name("label") label: String,
+        @Name("id") id: Long,
+        @Opt @Name("label") label: String?,
     ) {
-        flow.toggleLabel(sender, label)
+        flow.labels(sender, id, label)
     }
 
     @Command("dill save")
     @Permission("dillway.admin")
-    fun save(@Sender sender: CommandSender) {
-        flow.save(sender)
+    fun save(
+        @Sender sender: CommandSender,
+        @Name("id") id: Long,
+        @Opt @Name("confirm") confirm: String?,
+    ) {
+        flow.save(sender, id, confirm?.equals("confirm", ignoreCase = true) == true)
     }
 
     @Command("dill watch")
@@ -128,14 +127,20 @@ class DillCommand(
 
     @Command("dill rec predict")
     @Permission("dillway.admin")
-    fun predict(@Sender sender: CommandSender) {
-        flow.predict(sender)
+    fun predict(
+        @Sender sender: CommandSender,
+        @Name("id") id: Long,
+    ) {
+        flow.predict(sender, id)
     }
 
     @Command("dill rec discard")
     @Permission("dillway.admin")
-    fun discard(@Sender sender: CommandSender) {
-        flow.discard(sender)
+    fun discard(
+        @Sender sender: CommandSender,
+        @Name("id") id: Long,
+    ) {
+        flow.discard(sender, id)
     }
 
     @Command("dill models")

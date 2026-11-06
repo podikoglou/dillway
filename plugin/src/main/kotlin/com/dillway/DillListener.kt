@@ -5,8 +5,6 @@ import com.dillway.recording.HeldItemData
 import com.dillway.recording.MoveData
 import com.dillway.recording.PlayerContext
 import com.dillway.recording.RecordedPacket
-import com.dillway.recording.Recording
-import com.dillway.recording.RecordingParquet
 import org.bukkit.Location
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
@@ -16,8 +14,6 @@ import org.bukkit.event.player.PlayerAnimationEvent
 import org.bukkit.event.player.PlayerItemHeldEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
-import java.io.File
-import java.io.IOException
 import java.util.UUID
 
 class DillListener(
@@ -50,36 +46,6 @@ class DillListener(
     fun isRecording(player: Player): Boolean = sessions.containsKey(player.uniqueId)
 
     /**
-     * Writes one parquet copy for [label] and returns it, or null on failure.
-     * A multi-cheat recording is written once per selected label, which keeps
-     * the trainer's directory-per-label contract. Call off the main thread.
-     */
-    fun write(stopped: StoppedRecording, label: String): File? {
-        val dir = File(plugin.dataFolder, label).apply { mkdirs() }
-        val file = File(dir, "${stopped.session.started}.parquet")
-
-        val recording = Recording(
-            id = stopped.session.started,
-            started = stopped.session.started,
-            player = stopped.session.playerId.toString(),
-            label = label,
-            packets = stopped.session.packets.toList(),
-        )
-
-        return try {
-            RecordingParquet.writeRecording(file, recording)
-            plugin.logger.info(
-                "Saved $label recording for ${stopped.playerName} → ${file.name} " +
-                    "(${stopped.session.packets.size} packets)",
-            )
-            file
-        } catch (e: IOException) {
-            plugin.logger.severe("Failed to save recording: ${e.message}")
-            null
-        }
-    }
-
-    /**
      * Called on shutdown. Active sessions cannot be labeled anymore, so they
      * are written locally as `unlabeled` for later manual sorting and are not
      * uploaded.
@@ -92,7 +58,7 @@ class DillListener(
             plugin.logger.warning(
                 "Server stopping: saving active recording of $name as ${Labels.UNLABELED}",
             )
-            write(StoppedRecording(name, session), Labels.UNLABELED)
+            plugin.recordings.saveUnlabeled(StoppedRecording(name, session))
         }
     }
 

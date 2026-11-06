@@ -13,7 +13,8 @@ class DillPlugin : JavaPlugin() {
     private val listener = DillListener(this, watches)
     val storage = S3Storage(this)
     val models = ModelManager(this)
-    val flow = RecordingFlow(this, listener)
+    val recordings = RecordingStore(this)
+    val flow = RecordingFlow(this)
 
     /** Cheats the admin can label, from config; models add themselves. */
     val cheatNames: List<String>
@@ -64,10 +65,9 @@ class DillPlugin : JavaPlugin() {
     }
 
     override fun onDisable() {
-        // Waiting and active recordings are flushed locally as `unlabeled`
-        // (they cannot be labeled during shutdown and are never uploaded).
+        // Active recordings are flushed locally as `unlabeled`; they cannot be
+        // labeled during shutdown and are never uploaded.
         watches.stopAll()
-        flow.clear()
         listener.stopAll()
         models.close()
         storage.stop()

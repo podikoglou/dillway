@@ -7,14 +7,19 @@ To turn recordings into a model, see [../TRAINING.md](../TRAINING.md).
 
 ## Admin flow
 
-1. Record a player with `/dill rec start`, stop with `/dill rec stop`. Chat
-   buttons then offer: run prediction right away, open the label menu
-   (one toggle per cheat plus `legit`), or discard.
-2. Saving writes one parquet per selected label. Uploads happen when
-   remote storage is enabled, and recordings stay on disk otherwise.
-3. A waiting recording lives in memory until resolved. Consoles get
-   command names instead of clickable buttons; everything works by
-   typing the commands.
+1. `/dill rec start` records a player; `/dill rec stop` writes the session
+   and prints its recording ID. Every button from then on carries that ID,
+   so old chat messages keep working and a prediction never uses up a
+   recording.
+2. The staging copy is the source for predictions and later label changes.
+   Saving writes one labeled copy per selected label, and uploads happen
+   when remote storage is enabled.
+3. A save that would put the same recording ID under a label that already
+   holds it, locally or in the bucket, asks for confirmation. Confirming
+   replaces the old label set instead of adding a second copy.
+4. Discard removes local copies only. Uploaded objects stay in the bucket.
+5. Consoles get command names instead of clickable buttons; everything
+   works by typing the commands.
 
 All admin commands require `dillway.admin` (default `op`). Run
 `/dill models reload` after training new specialists. Config lives in

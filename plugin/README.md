@@ -24,9 +24,11 @@ All admin commands require `dillway.admin` (default `op`). Run
 
 `/dill watch <player>` predicts on a player while they play, instead of on
 a recording that has already stopped. The buffer holds only the last window
-of play, so the numbers track the current behaviour. A watch writes nothing
-to disk and ends when the player leaves, on `/dill watch stop`, or at
-shutdown. It can run alongside a recording of the same player.
+of play, so the numbers track the current behaviour. Clear play stays quiet:
+chat output appears only when a model reaches the configured threshold. A
+watch writes nothing to disk and ends when the player leaves, on
+`/dill watch stop`, or at shutdown. It can run alongside a recording of the
+same player.
 
 ## Predictions
 

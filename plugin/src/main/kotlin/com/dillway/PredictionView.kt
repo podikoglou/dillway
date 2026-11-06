@@ -17,6 +17,10 @@ import java.util.Locale
  */
 object PredictionView {
 
+    /** True when at least one specialist reached the threshold. */
+    fun flags(report: InferenceReport, threshold: Double): Boolean =
+        report.verdicts.any { it.isFlagged(threshold) }
+
     fun render(
         kind: String,
         playerName: String,

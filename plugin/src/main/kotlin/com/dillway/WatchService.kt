@@ -94,7 +94,7 @@ class WatchService(private val plugin: DillPlugin) {
             mini(
                 "<gray>Watching <yellow><player></yellow> " +
                     "<dark_gray>·</dark_gray> a prediction every <aqua><interval>s</aqua> " +
-                    "of play</gray>",
+                    "of play <dark_gray>·</dark_gray> chat shows flags only</gray>",
                 Placeholder.unparsed("player", player.name),
                 Placeholder.unparsed("interval", number(interval)),
             ),
@@ -231,13 +231,17 @@ class WatchService(private val plugin: DillPlugin) {
                 if (byPlayer[watch.playerId] !== watch || report == null) return@Runnable
 
                 watch.toldIdle = false
+                val threshold = plugin.config.getDouble("prediction.threshold", 0.5)
+                // Clear play stays quiet; the admin asked to hear about flags.
+                if (!PredictionView.flags(report, threshold)) return@Runnable
+
                 notify(
                     watch,
                     PredictionView.render(
                         kind = "Watch",
                         playerName = watch.playerName,
                         report = report,
-                        threshold = plugin.config.getDouble("prediction.threshold", 0.5),
+                        threshold = threshold,
                     ),
                 )
             })

@@ -15,8 +15,8 @@ fun InferenceReport.flagged(threshold: Double): Set<String> =
 /**
  * What changed between two consecutive predictions.
  *
- * Live watch announces only this: a steady verdict stays silent, and a flag is
- * reported once instead of on every interval.
+ * A chat watch announces only this, so the full report is printed once per
+ * verdict change instead of on every interval.
  */
 data class VerdictChange(
     val entered: Set<String> = emptySet(),

@@ -115,41 +115,6 @@ object PredictionView {
         return text.build()
     }
 
-    /**
-     * One chat line for a [VerdictChange]. [entered] are the cheats that
-     * crossed the threshold, [cleared] those that fell back under it.
-     */
-    fun changeLine(
-        subject: String,
-        report: InferenceReport,
-        entered: Set<String>,
-        cleared: Set<String>,
-    ): Component {
-        val text = Component.text().append(
-            mini(
-                "<gray>Watch <dark_gray>·</dark_gray> <yellow><subject></yellow></gray>",
-                Placeholder.unparsed("subject", subject),
-            ),
-        )
-
-        for (cheat in entered.sorted()) {
-            val verdict = report.verdicts.firstOrNull { it.cheat == cheat } ?: continue
-            text.append(dot()).append(
-                Component.text(
-                    "$cheat flagged ${percent(verdict.maxProbability)}%",
-                    NamedTextColor.RED,
-                ),
-            )
-        }
-
-        for (cheat in cleared.sorted()) {
-            text.append(dot())
-                .append(Component.text("$cheat cleared", NamedTextColor.GREEN))
-        }
-
-        return text.build()
-    }
-
     /** One model per line: verdict, name, then diagnostics, dimmest last. */
     private fun verdictLine(verdict: CheatVerdict, threshold: Double): Component {
         val flagged = verdict.isFlagged(threshold)

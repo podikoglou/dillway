@@ -18,6 +18,7 @@ class DillCommand(
     private val listener: DillListener,
     private val flow: RecordingFlow,
     private val modelManager: ModelManager,
+    private val kit: RecordingKit,
 ) {
 
     @Command("dill rec start")
@@ -85,6 +86,17 @@ class DillCommand(
         } else {
             flow.stopped(sender, stopped)
         }
+    }
+
+    /** Hands out the right-click item that records its holder. */
+    @Command("dill kit")
+    @Permission("dillway.admin")
+    fun giveKit(@Sender sender: CommandSender) {
+        if (sender !is Player) {
+            sender.sendMini("<red>Only a player can hold the kit.</red>")
+            return
+        }
+        kit.give(sender)
     }
 
     @Command("dill rec label")

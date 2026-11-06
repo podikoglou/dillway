@@ -110,15 +110,29 @@ class DillCommand(
     }
 
     // The root label stays as an alias: chat buttons in an older transcript
-    // still carry it.
+    // still carry it. `confirm` keeps its old meaning as the second word; any
+    // other word is a label, so `/dill rec save <id> <label>` works from chat
+    // and the console.
     @Command("dill rec save", "dill save")
     @Permission("dillway.admin")
     fun save(
         @Sender sender: CommandSender,
         @Name("id") id: Long,
+        @Opt @Name("label") label: String?,
         @Opt @Name("confirm") confirm: String?,
     ) {
-        flow.save(sender, id, confirm?.equals("confirm", ignoreCase = true) == true)
+        val parsed = SaveArguments.parse(label, confirm)
+        if (parsed == null) {
+            sender.sendMini("<red>Usage: <white>/dill rec save <id> [label] [confirm]</white></red>")
+            return
+        }
+
+        flow.save(
+            sender = sender,
+            id = id,
+            confirmed = parsed.confirmed,
+            label = parsed.label,
+        )
     }
 
     @Command("dill watch")

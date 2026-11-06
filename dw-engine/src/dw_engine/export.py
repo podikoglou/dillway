@@ -11,14 +11,15 @@ Every export is parity-checked against onnxruntime before it is allowed
 to leave the machine.
 """
 
+import hashlib
 import json
 import re
 from pathlib import Path
 
 import numpy as np
 import onnxruntime as ort
-import sklearn
 import skl2onnx
+import sklearn
 from skl2onnx import to_onnx
 from skl2onnx.common.data_types import FloatTensorType
 
@@ -72,17 +73,10 @@ def export_artifacts(
             f"ONNX parity check failed: max |dp| = {max_diff:.2e} > {TOLERANCE:.0e}"
         )
 
-    manifest = {
-        "dw_engine_version": VERSION,
-        "framework": f"scikit-learn {sklearn.__version__}",
-        "converter": f"skl2onnx {skl2onnx.__version__}",
-        "onnx_max_abs_p_diff": max_diff,
-        **manifest_extra,
-    }
     onnx_bytes = attach_metadata(
         onnx_bytes,
         {
-            "engine_version": manifest["dw_engine_version"],
+            "engine_version": VERSION,
             "features": json.dumps(manifest_extra["features"]),
             "labels": json.dumps(manifest_extra["labels"]),
             "window_seconds": str(manifest_extra["window_seconds"]),
@@ -90,6 +84,16 @@ def export_artifacts(
             "version": manifest_extra["version"],
         },
     )
+
+    manifest = {
+        "dw_engine_version": VERSION,
+        "framework": f"scikit-learn {sklearn.__version__}",
+        "converter": f"skl2onnx {skl2onnx.__version__}",
+        "onnx_max_abs_p_diff": max_diff,
+        "model_bytes": len(onnx_bytes),
+        "model_sha256": hashlib.sha256(onnx_bytes).hexdigest(),
+        **manifest_extra,
+    }
 
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "model.onnx").write_bytes(onnx_bytes)
@@ -100,10 +104,16 @@ def export_artifacts(
 
 
 def version_slug() -> str:
-    """UTC timestamp used as the model artifact version."""
-    import datetime as dt
+    """UTC timestamp plus a random suffix used as the model artifact version.
 
-    return dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
+    The suffix keeps two runs that start in the same second from writing
+    into the same directory. The timestamp prefix keeps versions sortable.
+    """
+    import datetime as dt
+    import secrets
+
+    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
+    return f"{stamp}-{secrets.token_hex(3)}"
 
 
 def sanitize_cheat(cheat: str) -> str:

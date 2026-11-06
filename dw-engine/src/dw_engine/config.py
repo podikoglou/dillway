@@ -32,7 +32,8 @@ MODELS_MOUNT = "/models"
 # <prefix>/<type>/<started>.parquet, e.g. recordings/legit/1674591086943.parquet
 DATASET_PREFIX = os.environ.get("DW_DATASET_PREFIX", "recordings")
 
-# Artifacts land at models/<cheat>/<version>/{model.onnx,manifest.json}
+# Artifacts land at models/<cheat>/<version>/{model.onnx,manifest.json};
+# models/<cheat>/latest.json points at the newest committed version.
 MODELS_PREFIX = "models"
 
 # --- Windowing (data-main/docs/DATASET.md) ----------------------------------

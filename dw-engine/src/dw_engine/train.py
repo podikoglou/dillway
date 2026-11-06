@@ -18,7 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import VERSION, config
+from . import VERSION, config, registry
 from .dataset import build_windows, design_matrix
 from .export import export_artifacts, sanitize_cheat, version_slug
 from .model import fit_model, grouped_score, print_metrics
@@ -76,12 +76,17 @@ def run_training(data_dir: Path, cheat: str, out_dir: Path) -> dict:
         },
     )
 
+    pointer = registry.publish(Path(out_dir), sanitize_cheat(cheat))
+    print(f"Latest pointer: models/{sanitize_cheat(cheat)}/{registry.POINTER_NAME} -> {pointer.get('version')}")
+
     summary = {
         "cheat": cheat,
         "version": version,
         "artifacts_dir": str(artifact_dir),
         "model_path": str(artifact_dir / "model.onnx"),
         "manifest_path": str(artifact_dir / "manifest.json"),
+        "latest_path": str(Path(out_dir) / config.MODELS_PREFIX / sanitize_cheat(cheat) / registry.POINTER_NAME),
+        "latest_version": pointer.get("version"),
         "feature_count": X.shape[1],
         "windows": len(X),
         "players": len(set(groups)),

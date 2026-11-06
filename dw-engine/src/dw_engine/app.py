@@ -87,6 +87,7 @@ def main(dataset_prefix: str = config.DATASET_PREFIX, cheat: str = "speed"):
     print("Run summary:")
     print(f"  cheat:      {summary['cheat']}")
     print(f"  version:    {summary['version']}")
+    print(f"  latest:     {summary['latest_version']}")
     print(f"  accuracy:   {summary['accuracy']:.4f} +/- {summary['accuracy_std']:.4f}")
     print(f"  recall:     {summary['recall']:.4f}")
     print(f"  FP/legithr: {summary['false_positives_per_legit_hour']:.2f}")

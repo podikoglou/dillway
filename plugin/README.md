@@ -25,6 +25,13 @@ All admin commands require `dillway.admin` (default `op`). Run
 `/dill models reload` after training new specialists. Config lives in
 `src/main/resources/config.yml`.
 
+## Self-recording kit
+
+`/dill kit` gives a player one item. A right click records the holder; the
+next right click stops the session and opens the normal save menu. The item
+never moves: it changes its look in place, so the same slot is also the stop
+button. A player who is watched cannot start a recording from the kit.
+
 ## Live watch
 
 `/dill watch <player>` predicts on a player while they play, instead of on

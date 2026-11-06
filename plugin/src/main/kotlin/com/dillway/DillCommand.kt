@@ -97,7 +97,9 @@ class DillCommand(
         flow.labels(sender, id, label)
     }
 
-    @Command("dill save")
+    // The root label stays as an alias: chat buttons in an older transcript
+    // still carry it.
+    @Command("dill rec save", "dill save")
     @Permission("dillway.admin")
     fun save(
         @Sender sender: CommandSender,

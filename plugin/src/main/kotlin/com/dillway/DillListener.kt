@@ -31,6 +31,7 @@ class DillListener(
         if (sessions.containsKey(player.uniqueId)) return RecordingStart.ALREADY_RECORDING
         if (watches.isWatching(player.uniqueId)) return RecordingStart.ALREADY_WATCHED
         sessions[player.uniqueId] = RecordingSession(player.uniqueId)
+        plugin.metrics.recordingStarted()
         return RecordingStart.STARTED
     }
 
@@ -40,6 +41,7 @@ class DillListener(
      */
     fun stopRecording(player: Player): StoppedRecording? {
         val session = sessions.remove(player.uniqueId) ?: return null
+        plugin.metrics.recordingStopped()
         return StoppedRecording(player.name, session)
     }
 
@@ -57,6 +59,7 @@ class DillListener(
         // Copy the keys; the removal inside the loop mutates the map.
         sessions.keys.toList().forEach { id ->
             val session = sessions.remove(id) ?: return@forEach
+            plugin.metrics.recordingStopped()
             val name = plugin.server.getPlayer(id)?.name ?: id.toString()
             plugin.logger.warning(
                 "Server stopping: saving active recording of $name as ${Labels.UNLABELED}",
@@ -147,7 +150,11 @@ class DillListener(
 
     /** Feeds both pipelines: a pending recording and any live watch. */
     private fun capture(player: Player, packet: RecordedPacket) {
-        sessions[player.uniqueId]?.packets?.add(packet)
+        val session = sessions[player.uniqueId]
+        if (session != null) {
+            session.packets.add(packet)
+            plugin.metrics.packetRecorded()
+        }
         watches.capture(player.uniqueId, packet)
     }
 

@@ -6,8 +6,9 @@ to ONNX, and stores it on Cloudflare R2. Training runs on
 [Modal](https://modal.com); data and artifacts both go through R2 —
 nothing is committed to git.
 
-Modeling decisions and evaluation protocol live in `data-main/docs/`
-(`ARCHITECTURE.md`, `ANALYSIS.md`, `DATASET.md`).
+Training samples are windows sliced from sessions instead of whole
+sessions; scores carry grouped cross-validation by player, and the
+release gate is false flags per legit hour, not accuracy.
 
 ## Setup
 

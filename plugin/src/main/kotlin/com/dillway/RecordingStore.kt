@@ -17,7 +17,10 @@ import java.io.File
  */
 class RecordingStore(private val plugin: DillPlugin) {
 
-    private val stagingDir = File(plugin.dataFolder, STAGING)
+    // After enable, never in the field initializer: JavaPlugin sets dataFolder
+    // during init, which runs after the plugin instance is constructed.
+    private val stagingDir: File get() = File(plugin.dataFolder, STAGING)
+
     private var lastId = 0L
 
     /**

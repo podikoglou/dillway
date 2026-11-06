@@ -45,6 +45,9 @@ class DillListener(
 
     fun isRecording(player: Player): Boolean = sessions.containsKey(player.uniqueId)
 
+    /** Number of players whose packets are currently held for recording. */
+    fun activeRecordings(): Int = sessions.size
+
     /**
      * Called on shutdown. Active sessions cannot be labeled anymore, so they
      * are written locally as `unlabeled` for later manual sorting and are not

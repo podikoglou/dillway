@@ -1,9 +1,11 @@
 package com.dillway
 
+import com.dillway.model.CheatVerdict
 import com.dillway.model.InferenceReport
 import com.dillway.recording.Recording
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.TextComponent
+import net.kyori.adventure.text.event.HoverEvent
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder
 import org.bukkit.command.CommandSender
@@ -43,14 +45,14 @@ class RecordingFlow(
         val text = Component.text()
             .append(
                 mini(
-                    "<gray>Recording of <yellow><player></yellow> stopped with " +
-                        "<aqua><packets></aqua> packets.",
+                    "<gray>Recording stopped <dark_gray>·</dark_gray> <yellow><player></yellow> " +
+                        "<dark_gray>·</dark_gray> <aqua><packets></aqua> packets</gray>",
                     Placeholder.unparsed("player", stopped.playerName),
-                    Placeholder.unparsed("packets", stopped.session.packets.size.toString()),
+                    Placeholder.unparsed("packets", count(stopped.session.packets.size)),
                 ),
             )
             .append(Component.newline())
-            .append(mini("<gray>What should happen to it?"))
+            .append(mini("<gray>Choose an action:</gray>"))
             .append(Component.newline())
 
         if (sender is Player) {
@@ -62,9 +64,8 @@ class RecordingFlow(
         } else {
             text.append(
                 mini(
-                    "<gray>Run <white>/dill rec train</white>, " +
-                        "<white>/dill rec predict</white> " +
-                        "or <white>/dill rec discard</white>.",
+                    "<gray>  /dill rec train <dark_gray>·</dark_gray> /dill rec predict " +
+                        "<dark_gray>·</dark_gray> /dill rec discard</gray>",
                 ),
             )
         }
@@ -115,7 +116,7 @@ class RecordingFlow(
             return
         }
 
-        sender.sendMini("<gray>Saving recording ...</gray>")
+        sender.sendMini("<gray>Saving recording…</gray>")
 
         plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
             val uploaded = mutableListOf<String>()
@@ -142,7 +143,7 @@ class RecordingFlow(
                 val text = Component.text()
                     .append(
                         mini(
-                            "<gray>Recording of <yellow><player></yellow>:</gray>",
+                            "<gray>Saved <yellow><player></yellow></gray>",
                             Placeholder.unparsed("player", entry.stopped.playerName),
                         ),
                     )
@@ -170,7 +171,7 @@ class RecordingFlow(
             return
         }
 
-        sender.sendMini("<gray>Running inference ...</gray>")
+        sender.sendMini("<gray>Running inference…</gray>")
 
         plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
             val recording = Recording(
@@ -227,8 +228,8 @@ class RecordingFlow(
         val text = Component.text()
             .append(
                 mini(
-                    "<gray>Labels for <yellow><player></yellow>'s recording. " +
-                        "Click to toggle, then <white>Done</white>.</gray>",
+                    "<gray>Labels <dark_gray>·</dark_gray> <yellow><player></yellow> " +
+                        "<dark_gray>·</dark_gray> click a label to toggle it</gray>",
                     Placeholder.unparsed("player", entry.stopped.playerName),
                 ),
             )
@@ -264,66 +265,108 @@ class RecordingFlow(
 
     private fun sendReport(sender: CommandSender, playerName: String, report: InferenceReport) {
         val threshold = plugin.config.getDouble("prediction.threshold", 0.5)
+        val rows = report.verdicts.sortedWith(
+            compareByDescending<CheatVerdict> { it.isFlagged(threshold) }
+                .thenByDescending { it.maxProbability },
+        )
+        val flagged = rows.count { it.isFlagged(threshold) }
+        val thresholdText = percent(threshold).removeSuffix(".0")
+
         val text = Component.text()
             .append(
                 mini(
-                    "<gray>Prediction for <yellow><player></yellow> over " +
-                        "<aqua><packets></aqua> movement packets " +
-                        "(<aqua><models></aqua> models).</gray>",
+                    "<gray>Prediction <dark_gray>·</dark_gray> <yellow><player></yellow> " +
+                        "<dark_gray>·</dark_gray> <aqua><packets></aqua> packets " +
+                        "<dark_gray>·</dark_gray> <aqua><models></aqua> models</gray>",
                     Placeholder.unparsed("player", playerName),
-                    Placeholder.unparsed("packets", report.movementPackets.toString()),
+                    Placeholder.unparsed("packets", count(report.movementPackets)),
                     Placeholder.unparsed("models", report.modelCount.toString()),
                 ),
             )
 
-        for (verdict in report.verdicts) {
-            text.append(Component.newline())
-            if (verdict.windows == 0) {
-                text.append(
-                    mini(
-                        "<gray><cheat>: <yellow>no usable movement windows</yellow></gray>",
-                        Placeholder.unparsed("cheat", verdict.cheat),
-                    ),
+        // The headline answers the only question the admin asks first: did
+        // anything trip the threshold?
+        text.append(Component.newline()).append(
+            if (flagged == 0) {
+                mini(
+                    "<green>No model flagged</green> <dark_gray>· threshold <threshold>%</dark_gray>",
+                    Placeholder.unparsed("threshold", thresholdText),
                 )
-                continue
-            }
+            } else {
+                mini(
+                    "<red><flagged> of <models> flagged</red> " +
+                        "<dark_gray>· threshold <threshold>%</dark_gray>",
+                    Placeholder.unparsed("flagged", flagged.toString()),
+                    Placeholder.unparsed("models", report.modelCount.toString()),
+                    Placeholder.unparsed("threshold", thresholdText),
+                )
+            },
+        )
 
-            val flagged = verdict.maxProbability >= threshold
-            text.append(
-                mini(
-                    "<gray><cheat>: <white>mean <mean>%</white>, " +
-                        "<white>max <max>%</white> over <aqua><windows></aqua> windows — </gray>",
-                    Placeholder.unparsed("cheat", verdict.cheat),
-                    Placeholder.unparsed("mean", percent(verdict.meanProbability)),
-                    Placeholder.unparsed("max", percent(verdict.maxProbability)),
-                    Placeholder.unparsed("windows", verdict.windows.toString()),
-                ),
-            ).append(
-                Component.text(
-                    if (flagged) "FLAGGED" else "clear",
-                    if (flagged) NamedTextColor.RED else NamedTextColor.GREEN,
-                ),
-            ).append(
-                mini(
-                    " <dark_gray>(model <version>, <window>s window)</dark_gray>",
-                    Placeholder.unparsed("version", verdict.version),
-                    Placeholder.unparsed("window", verdict.windowSeconds.toString()),
-                ),
-            )
+        for (verdict in rows) {
+            text.append(Component.newline()).append(verdictLine(verdict, threshold))
         }
 
         for (failure in report.failures) {
-            text.append(Component.newline())
-                .append(
-                    mini(
-                        "<red><failure></red>",
-                        Placeholder.unparsed("failure", failure),
-                    ),
-                )
+            text.append(Component.newline()).append(
+                mini("<red>! <failure></red>", Placeholder.unparsed("failure", failure)),
+            )
         }
 
         sender.sendMessage(text.build())
     }
+
+    /** One model per line: verdict, name, then diagnostics, dimmest last. */
+    private fun verdictLine(verdict: CheatVerdict, threshold: Double): Component {
+        val flagged = verdict.isFlagged(threshold)
+        val text = Component.text()
+            .append(Component.text("  "))
+            .append(
+                Component.text(
+                    if (flagged) "FLAGGED" else "clear",
+                    if (flagged) NamedTextColor.RED else NamedTextColor.GRAY,
+                ),
+            )
+            .append(Component.text(" "))
+            .append(
+                Component.text(verdict.cheat, NamedTextColor.WHITE).hoverEvent(
+                    HoverEvent.showText(
+                        mini(
+                            "model <version> <dark_gray>·</dark_gray> <window>s window",
+                            Placeholder.unparsed("version", verdict.version),
+                            Placeholder.unparsed("window", number(verdict.windowSeconds)),
+                        ),
+                    ),
+                ),
+            )
+            .append(Component.text("  "))
+
+        if (verdict.windows == 0) {
+            return text.append(
+                Component.text("no usable windows", NamedTextColor.DARK_GRAY),
+            ).build()
+        }
+
+        return text
+            .append(
+                Component.text(
+                    "${percent(verdict.maxProbability)}% peak",
+                    if (flagged) NamedTextColor.RED else NamedTextColor.WHITE,
+                ),
+            )
+            .append(dot())
+            .append(
+                Component.text("avg ${percent(verdict.meanProbability)}%", NamedTextColor.GRAY),
+            )
+            .append(dot())
+            .append(
+                Component.text("${verdict.windows} windows", NamedTextColor.GRAY),
+            )
+            .build()
+    }
+
+    private fun CheatVerdict.isFlagged(threshold: Double): Boolean =
+        windows > 0 && maxProbability >= threshold
 
     private fun appendList(
         text: TextComponent.Builder,
@@ -339,9 +382,9 @@ class RecordingFlow(
 
     private fun noPending(sender: CommandSender) {
         sender.sendMini(
-            "<red>No stopped recording is waiting. Start one with " +
-                "<white>/dill rec start</white> and stop it with " +
-                "<white>/dill rec stop</white>.</red>",
+            "<red>No stopped recording is waiting.</red>" +
+                "\n<gray>Start one with <white>/dill rec start <player></white>, " +
+                "stop it with <white>/dill rec stop <player></white>.</gray>",
         )
     }
 

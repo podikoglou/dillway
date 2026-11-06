@@ -1,6 +1,6 @@
-name: Dillway
+name: dw-agent
 version: 1.0.0
-main: com.dillway.DillPlugin
+main: com.dillway.agent.DwAgentPlugin
 api-version: '1.21'
 description: Records player movement packets for ML training data
 

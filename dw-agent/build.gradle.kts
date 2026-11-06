@@ -49,8 +49,8 @@ tasks.test {
 
 tasks.shadowJar {
     archiveFileName = "dw-agent.jar"
-    relocate("me.vaperion.blade", "com.dillway.libs.blade")
-    relocate("com.google.gson", "com.dillway.libs.gson")
+    relocate("me.vaperion.blade", "com.dillway.agent.libs.blade")
+    relocate("com.google.gson", "com.dillway.agent.libs.gson")
 
     // Paper provides Adventure and the JetBrains annotations at runtime.
     exclude("net/kyori/**")

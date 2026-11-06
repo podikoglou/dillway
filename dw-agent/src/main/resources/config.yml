@@ -20,7 +20,7 @@ watch:
 
 models:
   # Download the newest model for every cheat at startup. Without this the
-  # plugin uses the last models cached under plugins/Dillway/models/.
+  # plugin uses the last models cached under plugins/dw-agent/models/.
   refresh-on-startup: true
   # Object prefix in the bucket:
   #   models/<cheat>/<version>/model.onnx

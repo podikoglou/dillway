@@ -78,26 +78,28 @@ uv sync
 ```
 
 1. Create the Modal secret with your R2 token (R2 → API → Object
-   Read & Write) and the account id once:
+   Read & Write) and the bucket endpoint:
 
    ```sh
    uv run modal secret create r2-credentials \
        AWS_ACCESS_KEY_ID=<key-id> \
        AWS_SECRET_ACCESS_KEY=<secret> \
-       R2_ACCOUNT_ID=<cloudflare_account_id>
+       R2_BUCKET_URL=https://<account-id>.r2.cloudflarestorage.com
    ```
 
-   The account id belongs in the secret because the container
-   re-imports the app to build the bucket mounts; without it the
-   container cannot construct the endpoint.
+   The endpoint belongs in the secret because the container re-imports
+   the app to build the bucket mounts. The URL is the account endpoint
+   only — it does not contain the bucket name.
 
-2. Also export `R2_ACCOUNT_ID` in the local environment (e.g. in
-   `dw-engine/.env`), because the bucket mounts are built locally
-   before the app is uploaded:
+2. Put the same endpoint in `dw-engine/.env`:
 
    ```sh
-   R2_ACCOUNT_ID=<cloudflare_account_id>
+   R2_BUCKET_URL=https://<account-id>.r2.cloudflarestorage.com
    ```
+
+   The app loads this file automatically. The bucket mounts are built
+   locally before the app is uploaded, so the local process needs the
+   endpoint too.
 
 3. Put recordings in the `dillway` bucket under the dataset prefix,
    one directory per label:
@@ -111,24 +113,29 @@ uv sync
    (Buckets and prefix can be overridden with `R2_DATASET_BUCKET`,
    `R2_MODELS_BUCKET`, `DW_DATASET_PREFIX`.)
 
+   The recorder plugin uses the same layout: bucket `dillway`,
+   `key-prefix` `recordings`, one directory per recording type.
+
 ### Environment variables
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `R2_ACCOUNT_ID` | — | Cloudflare account id used to build the bucket endpoint URL; set locally and inside the `r2-credentials` secret |
-| `R2_ENDPOINT_URL` | — | Explicit endpoint, takes precedence over `R2_ACCOUNT_ID` |
+| `R2_BUCKET_URL` | — | R2 S3 endpoint, e.g. `https://<account-id>.r2.cloudflarestorage.com`; set in `.env` and in the `r2-credentials` secret |
 | `R2_DATASET_BUCKET` | `dillway` | Bucket the training data is read from |
 | `R2_MODELS_BUCKET` | `dillway` | Bucket artifacts are written to |
 | `DW_DATASET_PREFIX` | `recordings` | Root prefix for label dirs inside the dataset bucket |
 | `DW_DATASET_DIR` | `data` | Local dataset dir for `python -m dw_engine.train` |
 | `DW_MODELS_DIR` | `target` | Local artifact output dir |
 
+`dw-engine/.env` is loaded automatically when present; variables already
+set in the environment take precedence.
+
 ## Run
 
 Remote (Modal, data from R2, artifacts uploaded to R2):
 
 ```sh
-R2_ACCOUNT_ID=... uv run modal run src/dw_engine/app.py --dataset-prefix recordings --cheat speed
+uv run modal run src/dw_engine/app.py --dataset-prefix recordings --cheat speed
 ```
 
 Optional flags: `--dataset-prefix` and `--cheat` (see above for defaults).

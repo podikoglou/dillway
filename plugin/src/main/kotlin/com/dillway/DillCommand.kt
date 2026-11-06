@@ -112,22 +112,28 @@ class DillCommand(
         val loaded = modelManager.summary()
         if (loaded.isEmpty()) {
             sender.sendMini(
-                "<gray>No models loaded. Try <white>/dill models reload</white>.</gray>",
+                "<gray>No models loaded <dark_gray>·</dark_gray> " +
+                    "run <white>/dill models reload</white></gray>",
             )
             return
         }
 
         val text = Component.text()
-            .append(mini("<gray>Loaded models:</gray>"))
+            .append(
+                mini(
+                    "<gray>Loaded models <dark_gray>(<count>)</dark_gray></gray>",
+                    Placeholder.unparsed("count", loaded.size.toString()),
+                ),
+            )
         for (model in loaded) {
             text.append(Component.newline())
                 .append(
                     mini(
-                        "<gray>  <aqua><cheat></aqua> <version> " +
-                            "<dark_gray>(<window>s window, <features> features)</dark_gray></gray>",
+                        "  <aqua><cheat></aqua> <gray><version></gray> " +
+                            "<dark_gray>· <window>s window · <features> features</dark_gray>",
                         Placeholder.unparsed("cheat", model.cheat),
                         Placeholder.unparsed("version", model.version),
-                        Placeholder.unparsed("window", model.windowSeconds.toString()),
+                        Placeholder.unparsed("window", number(model.windowSeconds)),
                         Placeholder.unparsed("features", model.featureCount.toString()),
                     ),
                 )
@@ -154,17 +160,17 @@ class DillCommand(
 
             plugin.server.scheduler.runTask(plugin, Runnable {
                 val text = Component.text()
-                    .append(mini("<gray>Model refresh finished.</gray>"))
+                    .append(mini("<gray>Models reloaded</gray>"))
 
                 for (model in report.loaded) {
                     text.append(Component.newline())
                         .append(
                             mini(
-                                "<green>  <cheat></green> <version> " +
-                                    "<dark_gray>(<window>s window, <features> features)</dark_gray>",
+                                "  <green><cheat></green> <gray><version></gray> " +
+                                    "<dark_gray>· <window>s window · <features> features</dark_gray>",
                                 Placeholder.unparsed("cheat", model.cheat),
                                 Placeholder.unparsed("version", model.version),
-                                Placeholder.unparsed("window", model.windowSeconds.toString()),
+                                Placeholder.unparsed("window", number(model.windowSeconds)),
                                 Placeholder.unparsed("features", model.featureCount.toString()),
                             ),
                         )
@@ -173,14 +179,21 @@ class DillCommand(
                 for ((cheat, reason) in report.failed) {
                     text.append(Component.newline())
                         .append(
-                            Component.text("  $cheat: $reason", NamedTextColor.RED),
+                            mini(
+                                "  <red><cheat>: <reason></red>",
+                                Placeholder.unparsed("cheat", cheat),
+                                Placeholder.unparsed("reason", reason),
+                            ),
                         )
                 }
 
                 if (report.loaded.isEmpty()) {
                     text.append(Component.newline())
                         .append(
-                            mini("<yellow>No model was loaded; the cached models stay in memory.</yellow>"),
+                            mini(
+                                "<yellow>Nothing loaded, " +
+                                    "the cached models stay in memory.</yellow>",
+                            ),
                         )
                 }
 

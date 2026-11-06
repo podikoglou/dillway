@@ -208,6 +208,26 @@ metrics, framework/converter versions, the onnxruntime-vs-sklearn parity
 error at export time (typically ~1e-6), and the SHA-256 of the exported
 `model.onnx`, which is what the latest pointer verifies against.
 
+## Inference in the plugin
+
+The Paper plugin is the consumer of these artifacts. It reads
+`models/<cheat>/latest.json` from the bucket, downloads the ONNX it names,
+verifies the `model_sha256`, and runs it locally with
+[onnxruntime-java](https://mvnrepository.com/artifact/com.microsoft.onnxruntime/onnxruntime).
+
+Two invariants make that work without any config exchange:
+
+- **Feature parity.** The plugin re-implements `features.py` in
+  `plugin/src/main/kotlin/com/dillway/inference/FeatureExtractor.kt`.
+  A test fixture (`plugin/.../ParityTest.kt`) asserts the Kotlin values
+  match Python on a mixed stream (dt=0, >2 s gap, all packet kinds). Any
+  change to feature extraction here must port there and refresh the
+  fixture, and models exported before that change must not be trusted.
+- **Metadata contract.** The loader rejects a model whose `dw.features`
+  contains a feature the plugin does not implement, whose `dw.window_seconds`
+  is missing, or whose `dw.cheat` disagrees with the directory it was
+  downloaded from.
+
 ## Converting the older JSON dataset
 
 Recordings exported before the switch to parquet live as JSON files

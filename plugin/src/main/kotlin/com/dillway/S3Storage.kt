@@ -129,6 +129,7 @@ class S3Storage(private val plugin: DillPlugin) {
     private fun uploadBlocking(file: File, label: String, fileName: String) {
         val key = recordingKey(label, fileName)
         val s3 = source ?: return
+        val bytes = file.length()
 
         try {
             s3.putObject(
@@ -139,13 +140,16 @@ class S3Storage(private val plugin: DillPlugin) {
                     .build(),
                 RequestBody.fromFile(file),
             )
+            plugin.metrics.uploadSucceeded(bytes)
             if (file.exists() && !file.delete()) {
                 plugin.logger.warning("Uploaded $key but could not delete the local copy $file")
             }
             plugin.logger.info("Uploaded $key")
         } catch (e: IOException) {
+            plugin.metrics.uploadFailed()
             plugin.logger.severe("Upload of $key failed, keeping local copy ${file.name}: ${e.message}")
         } catch (e: S3Exception) {
+            plugin.metrics.uploadFailed()
             plugin.logger.severe("Upload of $key failed, keeping local copy ${file.name}: ${e.message}")
         }
     }

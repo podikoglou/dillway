@@ -29,6 +29,13 @@ dependencies {
     implementation("software.amazon.awssdk:s3")
     implementation("software.amazon.awssdk:url-connection-client")
 
+    // Local inference for downloaded ONNX specialists. The jar carries
+    // natives for every platform; the shadow task keeps only Linux x64.
+    implementation("com.microsoft.onnxruntime:onnxruntime:1.22.0")
+
+    // Reads the R2 latest pointer and the model's dw.* metadata.
+    implementation("com.google.code.gson:gson:2.11.0")
+
     testImplementation(kotlin("test"))
 }
 
@@ -43,10 +50,19 @@ tasks.test {
 tasks.shadowJar {
     archiveFileName = "dillway.jar"
     relocate("me.vaperion.blade", "com.dillway.libs.blade")
+    relocate("com.google.gson", "com.dillway.libs.gson")
 
     // Paper provides Adventure and the JetBrains annotations at runtime.
     exclude("net/kyori/**")
     exclude("org/jetbrains/annotations/**")
+
+    // ai.onnxruntime must keep its package: its JNI entry points and native
+    // loader use the original names. The server is Linux x64, so drop the
+    // other platform natives (the dependency is ~140 MB without this).
+    exclude("ai/onnxruntime/native/linux-aarch64/**")
+    exclude("ai/onnxruntime/native/osx-aarch64/**")
+    exclude("ai/onnxruntime/native/osx-x64/**")
+    exclude("ai/onnxruntime/native/win-x64/**")
 
     // kotlin-stdlib ships in the jar; it must stay in the kotlin.* packages.
 }

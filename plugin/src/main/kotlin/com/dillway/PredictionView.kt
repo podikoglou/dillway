@@ -17,10 +17,6 @@ import java.util.Locale
  */
 object PredictionView {
 
-    /** True when at least one specialist reached the threshold. */
-    fun flags(report: InferenceReport, threshold: Double): Boolean =
-        report.verdicts.any { it.isFlagged(threshold) }
-
     fun render(
         kind: String,
         subject: String,
@@ -79,6 +75,81 @@ object PredictionView {
         return text.build()
     }
 
+    /**
+     * One line of live state for the action bar.
+     *
+     * The action bar cannot wrap, so this shows a single model: the flagged
+     * one with the highest peak, or the highest peak overall when nothing is
+     * flagged. A count of the other flagged models keeps the rest visible
+     * without a second line.
+     */
+    fun liveLine(subject: String, report: InferenceReport, threshold: Double): Component {
+        val flagged = report.verdicts.filter { it.isFlagged(threshold) }
+        val top = flagged.maxByOrNull { it.maxProbability }
+            ?: report.verdicts.filter { it.windows > 0 }.maxByOrNull { it.maxProbability }
+
+        if (top == null) {
+            return Component.text()
+                .append(Component.text(subject, NamedTextColor.YELLOW))
+                .append(dot())
+                .append(Component.text("warming up", NamedTextColor.DARK_GRAY))
+                .build()
+        }
+
+        val text = Component.text()
+            .append(Component.text(subject, NamedTextColor.YELLOW))
+            .append(dot())
+            .append(Component.text(top.cheat, NamedTextColor.GRAY))
+            .append(Component.text(" "))
+            .append(
+                Component.text(
+                    "${percent(top.maxProbability)}%",
+                    if (flagged.isEmpty()) NamedTextColor.WHITE else NamedTextColor.RED,
+                ),
+            )
+
+        if (flagged.size > 1) {
+            text.append(dot())
+                .append(Component.text("${flagged.size} flagged", NamedTextColor.RED))
+        }
+        return text.build()
+    }
+
+    /**
+     * One chat line for a [VerdictChange]. [entered] are the cheats that
+     * crossed the threshold, [cleared] those that fell back under it.
+     */
+    fun changeLine(
+        subject: String,
+        report: InferenceReport,
+        entered: Set<String>,
+        cleared: Set<String>,
+    ): Component {
+        val text = Component.text().append(
+            mini(
+                "<gray>Watch <dark_gray>·</dark_gray> <yellow><subject></yellow></gray>",
+                Placeholder.unparsed("subject", subject),
+            ),
+        )
+
+        for (cheat in entered.sorted()) {
+            val verdict = report.verdicts.firstOrNull { it.cheat == cheat } ?: continue
+            text.append(dot()).append(
+                Component.text(
+                    "$cheat flagged ${percent(verdict.maxProbability)}%",
+                    NamedTextColor.RED,
+                ),
+            )
+        }
+
+        for (cheat in cleared.sorted()) {
+            text.append(dot())
+                .append(Component.text("$cheat cleared", NamedTextColor.GREEN))
+        }
+
+        return text.build()
+    }
+
     /** One model per line: verdict, name, then diagnostics, dimmest last. */
     private fun verdictLine(verdict: CheatVerdict, threshold: Double): Component {
         val flagged = verdict.isFlagged(threshold)
@@ -127,9 +198,6 @@ object PredictionView {
             )
             .build()
     }
-
-    private fun CheatVerdict.isFlagged(threshold: Double): Boolean =
-        windows > 0 && maxProbability >= threshold
 
     private fun percent(value: Double): String =
         String.format(Locale.ROOT, "%.1f", value * 100.0)

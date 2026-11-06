@@ -78,16 +78,22 @@ uv sync
 ```
 
 1. Create the Modal secret with your R2 token (R2 → API → Object
-   Read & Write) once:
+   Read & Write) and the account id once:
 
    ```sh
    uv run modal secret create r2-credentials \
        AWS_ACCESS_KEY_ID=<key-id> \
-       AWS_SECRET_ACCESS_KEY=<secret>
+       AWS_SECRET_ACCESS_KEY=<secret> \
+       R2_ACCOUNT_ID=<cloudflare_account_id>
    ```
 
-2. Provide the account endpoint locally (needed to build the bucket
-   mounts), e.g. in `dw-engine/.env`:
+   The account id belongs in the secret because the container
+   re-imports the app to build the bucket mounts; without it the
+   container cannot construct the endpoint.
+
+2. Also export `R2_ACCOUNT_ID` in the local environment (e.g. in
+   `dw-engine/.env`), because the bucket mounts are built locally
+   before the app is uploaded:
 
    ```sh
    R2_ACCOUNT_ID=<cloudflare_account_id>
@@ -109,7 +115,7 @@ uv sync
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `R2_ACCOUNT_ID` | — | Cloudflare account id, used to build the bucket endpoint URL (needed by `modal run`) |
+| `R2_ACCOUNT_ID` | — | Cloudflare account id used to build the bucket endpoint URL; set locally and inside the `r2-credentials` secret |
 | `R2_ENDPOINT_URL` | — | Explicit endpoint, takes precedence over `R2_ACCOUNT_ID` |
 | `R2_DATASET_BUCKET` | `dillway` | Bucket the training data is read from |
 | `R2_MODELS_BUCKET` | `dillway` | Bucket artifacts are written to |

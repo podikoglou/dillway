@@ -54,7 +54,7 @@ class RecordingFlow(
             .append(Component.newline())
 
         if (sender is Player) {
-            text.append(chatButton("[Train]", "/dill training", NamedTextColor.GREEN))
+            text.append(chatButton("[Train]", "/dill train", NamedTextColor.GREEN))
                 .append(separator())
                 .append(chatButton("[Predict]", "/dill predict", NamedTextColor.AQUA))
                 .append(separator())
@@ -62,7 +62,7 @@ class RecordingFlow(
         } else {
             text.append(
                 mini(
-                    "<gray>Run <white>/dill training</white>, <white>/dill predict</white> " +
+                    "<gray>Run <white>/dill train</white>, <white>/dill predict</white> " +
                         "or <white>/dill discard</white>.",
                 ),
             )
@@ -72,7 +72,7 @@ class RecordingFlow(
     }
 
     /** Opens the multi-select label menu. */
-    fun training(sender: CommandSender) {
+    fun train(sender: CommandSender) {
         val entry = pending[key(sender)] ?: return noPending(sender)
         sendLabelMenu(sender, entry)
     }

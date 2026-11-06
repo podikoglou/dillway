@@ -243,6 +243,8 @@ class RecordingFlow(private val plugin: DillPlugin) {
         }
 
         text.append(Component.newline())
+            .append(chatButton("[Predict]", "/dill rec predict $id", NamedTextColor.AQUA))
+            .append(separator())
             .append(chatButton("[Save]", "/dill save $id"))
             .append(separator())
             .append(chatButton("[Remove]", "/dill rec discard $id", NamedTextColor.RED))

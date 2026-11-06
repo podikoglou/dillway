@@ -5,10 +5,19 @@ code runs locally and inside Modal.
 """
 
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load dw-engine/.env when present, so local runs need no shell exports.
+# The file is absent inside Modal containers, which receive the same
+# variables from the r2-credentials secret.
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", encoding="utf-8-sig")
 
 # --- R2 (S3-compatible) -----------------------------------------------------
 
 # Modal secret with the credentials: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+# and R2_BUCKET_URL
 R2_SECRET_NAME = "r2-credentials"
 
 DATASET_BUCKET = os.environ.get("R2_DATASET_BUCKET", "dillway")

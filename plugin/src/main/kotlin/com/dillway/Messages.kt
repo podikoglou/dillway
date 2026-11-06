@@ -4,7 +4,6 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.event.HoverEvent
 import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.format.TextDecoration
 import net.kyori.adventure.text.minimessage.MiniMessage
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
 import org.bukkit.command.CommandSender
@@ -24,7 +23,6 @@ fun chatButton(
     command: String,
     color: NamedTextColor = NamedTextColor.GREEN,
 ): Component = Component.text(label, color)
-    .decoration(TextDecoration.BOLD, true)
     .clickEvent(ClickEvent.runCommand(command))
     .hoverEvent(HoverEvent.showText(Component.text(command, NamedTextColor.GRAY)))
 

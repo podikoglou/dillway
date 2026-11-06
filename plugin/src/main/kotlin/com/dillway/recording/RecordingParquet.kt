@@ -46,9 +46,7 @@ object RecordingParquet {
         .addColumn("x", PhysicalType.DOUBLE, RepetitionType.OPTIONAL)
         .addColumn("y", PhysicalType.DOUBLE, RepetitionType.OPTIONAL)
         .addColumn("z", PhysicalType.DOUBLE, RepetitionType.OPTIONAL)
-        // Location stores yaw and pitch as float. Keep them as float; widening
-        // to double would capture the float's 0.1 artifacts instead of the player
-        // state as the JVM reports it.
+        // Location stores yaw and pitch as float; the schema keeps that width.
         .addColumn("yaw", PhysicalType.FLOAT, RepetitionType.OPTIONAL)
         .addColumn("pitch", PhysicalType.FLOAT, RepetitionType.OPTIONAL)
         // Legacy key names: the client-reported ground flag and the
@@ -96,11 +94,8 @@ object RecordingParquet {
     /**
      * Writes one recording to a Parquet sink. The output holds one row per
      * packet; the context columns carry the context captured with that packet.
-     *
-     * Hardwood's [OutputFile] is the destination abstraction — the write-side
-     * equivalent of a Rust-style `Write` trait — so a recording can go to a
-     * file, memory, or any byte transport. Callers that want a plain stream
-     * use the [OutputStream] overload.
+     * [OutputFile] is the destination abstraction; callers wanting a plain
+     * stream use the [OutputStream] overload.
      */
     fun writeRecording(destination: OutputFile, recording: Recording) {
         ParquetFileWriter.create(destination, schema).use { writer ->
@@ -114,8 +109,6 @@ object RecordingParquet {
                         .setString("packet_type", packet.type)
                         .setLong("timestamp", packet.timestamp)
 
-                    // Whatever payload the packet carries; leaves the other
-                    // payload columns unset (null in the file).
                     when (val data = packet.data) {
                         is MoveData -> row.setDouble("x", data.x)
                             .setDouble("y", data.y)
@@ -175,9 +168,9 @@ object RecordingParquet {
 
     /**
      * Writes one recording into [output]. The stream is flushed, not closed —
-     * lifetime stays with the caller. A failed write leaves bytes behind in
-     * the stream; every Parquet file ends with its footer, so the recipient
-     * read must fail and treat the recording as unusable.
+     * lifetime stays with the caller. A failed or discarded write leaves bytes
+     * behind in the stream; with no footer at the end, consumers can tell the
+     * recording is unusable.
      */
     fun writeRecording(output: OutputStream, recording: Recording) =
         writeRecording(OutputStreamOutputFile(output), recording)
@@ -197,17 +190,12 @@ private class OutputStreamOutputFile(private val output: OutputStream) : OutputF
     @Volatile
     private var position: Long = 0
 
-    override fun create() {
-        // Nothing to acquire — the caller owns the stream.
-    }
+    override fun create() {}
 
     override fun write(data: ByteBuffer) {
         val length = data.remaining()
         if (length == 0) return
         synchronized(output) {
-            // The buffer may be direct, with no backing array, or carry an
-            // offset. Copy through a heap chunk and drain it fully: the
-            // contract consumes the buffer.
             val chunk = ByteArray(minOf(length, CHUNK_BYTES))
             while (data.hasRemaining()) {
                 val take = minOf(data.remaining(), chunk.size)
@@ -225,13 +213,11 @@ private class OutputStreamOutputFile(private val output: OutputStream) : OutputF
     }
 
     override fun discard() {
-        // The bytes already reached the stream and cannot be unwritten. The
-        // writer only calls this when the file is invalid, and the missing
-        // footer makes that visible to any reader.
+        // Cannot unwrite what already reached the stream; the missing footer
+        // makes a discarded write visible to any consumer.
     }
 
     private companion object {
-        /** Drain in 64 KiB pieces; Hardwood hands over page-sized buffers. */
         private const val CHUNK_BYTES = 64 * 1024
     }
 }

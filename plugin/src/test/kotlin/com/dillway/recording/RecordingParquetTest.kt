@@ -13,9 +13,8 @@ import kotlin.test.assertTrue
 import org.junit.Test
 
 /**
- * Writes a recording to a temp file and reads it back through the row reader,
- * locking the one-row-per-packet layout: payload columns are set only on the
- * packets that carry them, and every context column lands on every row.
+ * Writes a recording and reads it back through the row reader, locking the
+ * one-row-per-packet layout and the null pattern of the payload columns.
  */
 class RecordingParquetTest {
 
@@ -101,7 +100,7 @@ class RecordingParquetTest {
                 assertEquals(2, rows.getInt("itemInHandIndex"))
                 assertContext(rows)
 
-                // No further rows: one row per packet, three packets.
+                // No further rows: three packets, three rows.
                 assertEquals(false, rows.hasNext())
             }
         }
@@ -155,7 +154,6 @@ class RecordingParquetTest {
         assertEquals(false, rows.getBoolean("flying"))
     }
 
-    /** One representative context; the writer copies the fields verbatim. */
     private fun moveContext(onGround: Boolean) = PlayerContext(
         flySpeed = 0.1f,
         velocityZ = 0.0,

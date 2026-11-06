@@ -44,6 +44,7 @@ class RecordingStore(private val plugin: DillPlugin) {
             label = Labels.UNLABELED,
         )
         write(stagingFile(id), recording) ?: return null
+        plugin.metrics.recordingSaved()
         plugin.logger.info(
             "Saved recording ${stopped.playerName} as $id (${recording.packets.size} packets)",
         )
@@ -61,14 +62,21 @@ class RecordingStore(private val plugin: DillPlugin) {
             id = id,
             label = Labels.UNLABELED,
         )
-        return write(File(File(plugin.dataFolder, Labels.UNLABELED), "$id.parquet"), recording)
+        val file = write(
+            File(File(plugin.dataFolder, Labels.UNLABELED), "$id.parquet"),
+            recording,
+        )
+        if (file != null) plugin.metrics.recordingSaved()
+        return file
     }
 
     /** Writes one labeled copy of [recording] and returns the file. */
     fun writeLabel(recording: Recording, label: String): File? {
         val dir = File(plugin.dataFolder, label)
         val file = File(dir, "${recording.id}.parquet")
-        return write(file, recording.copy(label = label))
+        val written = write(file, recording.copy(label = label))
+        if (written != null) plugin.metrics.labelWritten()
+        return written
     }
 
     /** Loads a recording by ID, or null when no local copy exists. */

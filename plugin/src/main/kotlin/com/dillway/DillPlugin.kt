@@ -9,6 +9,7 @@ import org.bukkit.plugin.java.JavaPlugin
 class DillPlugin : JavaPlugin() {
 
     // Eager fields: set before onEnable, so onDisable is always safe.
+    val metrics = Metrics()
     val watches = WatchService(this)
     private val listener = DillListener(this, watches)
     val storage = S3Storage(this)
@@ -30,6 +31,12 @@ class DillPlugin : JavaPlugin() {
 
     /** True when a recording session holds this player's packets. */
     fun isRecording(player: Player): Boolean = listener.isRecording(player)
+
+    /** Recording sessions that still hold packets in memory. */
+    fun activeRecordings(): Int = listener.activeRecordings()
+
+    /** Probability at which a window counts as a cheat verdict. */
+    fun threshold(): Double = config.getDouble("prediction.threshold", 0.5)
 
     override fun onEnable() {
         saveDefaultConfig()

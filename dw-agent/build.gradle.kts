@@ -48,7 +48,7 @@ tasks.test {
 }
 
 tasks.shadowJar {
-    archiveFileName = "dillway.jar"
+    archiveFileName = "dw-agent.jar"
     relocate("me.vaperion.blade", "com.dillway.libs.blade")
     relocate("com.google.gson", "com.dillway.libs.gson")
 

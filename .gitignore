@@ -1,6 +1,6 @@
 # Gradle build output
-plugin/.gradle/
-plugin/build/
+dw-agent/.gradle/
+dw-agent/build/
 
 # IDE metadata
 .project

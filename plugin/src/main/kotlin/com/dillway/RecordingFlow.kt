@@ -248,7 +248,7 @@ class RecordingFlow(
             text.append(
                 chatButton(
                     labelText,
-                    "/dill label $label",
+                    "/dill rec label $label",
                     if (isSelected) NamedTextColor.GREEN else NamedTextColor.GRAY,
                 ),
             )

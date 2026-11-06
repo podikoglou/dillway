@@ -79,7 +79,7 @@ class DillCommand(
         flow.train(sender)
     }
 
-    @Command("dill label")
+    @Command("dill rec label")
     @Permission("dillway.admin")
     fun label(
         @Sender sender: CommandSender,

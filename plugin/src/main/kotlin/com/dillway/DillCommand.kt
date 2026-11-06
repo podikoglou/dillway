@@ -4,6 +4,7 @@ import com.dillway.model.ModelManager
 import me.vaperion.blade.annotation.command.Command
 import me.vaperion.blade.annotation.command.Permission
 import me.vaperion.blade.annotation.parameter.Name
+import me.vaperion.blade.annotation.parameter.Opt
 import me.vaperion.blade.annotation.parameter.Sender
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -92,6 +93,24 @@ class DillCommand(
     @Permission("dillway.admin")
     fun save(@Sender sender: CommandSender) {
         flow.save(sender)
+    }
+
+    @Command("dill watch")
+    @Permission("dillway.admin")
+    fun watch(
+        @Sender sender: CommandSender,
+        @Name("player") target: Player,
+    ) {
+        plugin.watches.start(sender, target)
+    }
+
+    @Command("dill watch stop")
+    @Permission("dillway.admin")
+    fun watchStop(
+        @Sender sender: CommandSender,
+        @Opt @Name("player") target: Player?,
+    ) {
+        plugin.watches.stop(sender, target)
     }
 
     @Command("dill rec predict")

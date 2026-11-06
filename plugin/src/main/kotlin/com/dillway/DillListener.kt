@@ -15,11 +15,15 @@ import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerAnimationEvent
 import org.bukkit.event.player.PlayerItemHeldEvent
 import org.bukkit.event.player.PlayerMoveEvent
+import org.bukkit.event.player.PlayerQuitEvent
 import java.io.File
 import java.io.IOException
 import java.util.UUID
 
-class DillListener(private val plugin: DillPlugin) : Listener {
+class DillListener(
+    private val plugin: DillPlugin,
+    private val watches: WatchService,
+) : Listener {
 
     private val sessions = mutableMapOf<UUID, RecordingSession>()
 
@@ -98,7 +102,7 @@ class DillListener(private val plugin: DillPlugin) : Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onMove(event: PlayerMoveEvent) {
         val player = event.player
-        val session = sessions[player.uniqueId] ?: return
+        if (!isCapturing(player)) return
 
         val from = event.from
         val to = event.to
@@ -114,44 +118,68 @@ class DillListener(private val plugin: DillPlugin) : Listener {
             else -> "PacketPlayInLook"
         }
 
-        session.packets += RecordedPacket(
-            type = packetType,
-            timestamp = System.currentTimeMillis(),
-            data = to.toMoveData(player.clientOnGround(), posChanged, lookChanged),
-            context = player.toPlayerContext(from),
+        capture(
+            player,
+            RecordedPacket(
+                type = packetType,
+                timestamp = System.currentTimeMillis(),
+                data = to.toMoveData(player.clientOnGround(), posChanged, lookChanged),
+                context = player.toPlayerContext(from),
+            ),
         )
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onAnimation(event: PlayerAnimationEvent) {
         val player = event.player
-        val session = sessions[player.uniqueId] ?: return
+        if (!isCapturing(player)) return
 
         // The legacy format carries a timestamp inside the data entry too.
-        session.packets += RecordedPacket(
-            type = "PacketPlayInArmAnimation",
-            timestamp = System.currentTimeMillis(),
-            data = AnimationData(timestamp = System.currentTimeMillis()),
-            context = player.toPlayerContext(player.location),
+        capture(
+            player,
+            RecordedPacket(
+                type = "PacketPlayInArmAnimation",
+                timestamp = System.currentTimeMillis(),
+                data = AnimationData(timestamp = System.currentTimeMillis()),
+                context = player.toPlayerContext(player.location),
+            ),
         )
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onHeldItem(event: PlayerItemHeldEvent) {
         val player = event.player
-        val session = sessions[player.uniqueId] ?: return
+        if (!isCapturing(player)) return
 
-        session.packets += RecordedPacket(
-            type = "PacketPlayInHeldItemSlot",
-            timestamp = System.currentTimeMillis(),
-            data = HeldItemData(itemInHandIndex = event.newSlot),
-            context = player.toPlayerContext(player.location),
+        capture(
+            player,
+            RecordedPacket(
+                type = "PacketPlayInHeldItemSlot",
+                timestamp = System.currentTimeMillis(),
+                data = HeldItemData(itemInHandIndex = event.newSlot),
+                context = player.toPlayerContext(player.location),
+            ),
         )
+    }
+
+    @EventHandler
+    fun onQuit(event: PlayerQuitEvent) {
+        watches.playerQuit(event.player)
     }
 
     // -------------------------------------------------------------------------
     // Mapping to the recording model
     // -------------------------------------------------------------------------
+
+    /** True when a recording or a live watch needs this player's packets. */
+    private fun isCapturing(player: Player): Boolean =
+        sessions.containsKey(player.uniqueId) || watches.isWatching(player.uniqueId)
+
+    /** Feeds both pipelines: a pending recording and any live watch. */
+    private fun capture(player: Player, packet: RecordedPacket) {
+        sessions[player.uniqueId]?.packets?.add(packet)
+        watches.capture(player.uniqueId, packet)
+    }
 
     /**
      * The client-reported ground state. Paper deprecates it as spoofable, but

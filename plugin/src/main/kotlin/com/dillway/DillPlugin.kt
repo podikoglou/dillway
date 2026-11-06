@@ -8,7 +8,8 @@ import org.bukkit.plugin.java.JavaPlugin
 class DillPlugin : JavaPlugin() {
 
     // Eager fields: set before onEnable, so onDisable is always safe.
-    private val listener = DillListener(this)
+    val watches = WatchService(this)
+    private val listener = DillListener(this, watches)
     val storage = S3Storage(this)
     val models = ModelManager(this)
     val flow = RecordingFlow(this, listener)
@@ -61,6 +62,7 @@ class DillPlugin : JavaPlugin() {
     override fun onDisable() {
         // Waiting and active recordings are flushed locally as `unlabeled`
         // (they cannot be labeled during shutdown and are never uploaded).
+        watches.stopAll()
         flow.clear()
         listener.stopAll()
         models.close()

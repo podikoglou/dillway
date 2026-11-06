@@ -10,6 +10,10 @@ prediction:
   # A recording is flagged when any window reaches this cheat probability.
   threshold: 0.5
 
+watch:
+  # How often a watched player is predicted on.
+  interval-seconds: 5
+
 models:
   # Download the newest model for every cheat at startup. Without this the
   # plugin uses the last models cached under plugins/Dillway/models/.

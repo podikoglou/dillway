@@ -36,7 +36,9 @@ class DillCommand(
                             ),
                         )
                         .append(separator())
-                        .append(chatButton("[Stop]", "/dill stop ${target.name}"))
+                        .append(
+                            chatButton("[Stop]", "/dill stop ${target.name}", NamedTextColor.GRAY),
+                        )
                         .build(),
                 )
             } else {

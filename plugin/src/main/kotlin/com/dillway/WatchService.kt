@@ -23,10 +23,11 @@ import kotlin.math.roundToLong
  * specialists off the main thread. A watch is ephemeral: it writes nothing
  * to disk and is dropped on quit, `/dill watch stop`, or shutdown.
  *
- * The live state goes to the action bar, which overwrites itself, so a steady
- * verdict sends no chat messages. Chat carries one line only when the set of
- * flagged models changes. Consoles have no action bar and get the full report
- * on a change instead.
+ * The live state goes to the action bar, which overwrites itself, so a watch
+ * is silent in chat. Chat output exists only in `chat` mode and for consoles,
+ * which have no action bar; there it prints the full report when the set of
+ * flagged models changes. The full report is available on demand and when the
+ * watch stops.
  *
  * Main thread only, except for the inference call and the hop back with the
  * result.
@@ -127,18 +128,13 @@ class WatchService(private val plugin: DillPlugin) {
 
         val text = Component.text().append(
             mini(
-                "<gray>Watching <yellow><player></yellow>.</gray>",
+                "<green>Watching <yellow><player></yellow>.</green>",
                 Placeholder.unparsed("player", player.name),
             ),
         )
-        if (watch.display == Display.ACTION_BAR) {
-            text.append(separator()).append(
-                mini("<dark_gray>live above the hotbar</dark_gray>"),
-            )
-        }
         if (sender is Player) {
             text.append(separator()).append(
-                chatButton("[Report]", "/dill watch report ${player.name}", NamedTextColor.AQUA),
+                chatButton("[Details]", "/dill watch details ${player.name}", NamedTextColor.AQUA),
             )
             text.append(separator()).append(
                 chatButton("[Stop]", "/dill watch stop ${player.name}", NamedTextColor.RED),
@@ -204,8 +200,8 @@ class WatchService(private val plugin: DillPlugin) {
         }
     }
 
-    /** Prints the newest full report of one watch, from the `[Report]` button. */
-    fun report(sender: CommandSender, target: Player) {
+    /** Prints the newest full report of one watch, from the `[Details]` button. */
+    fun details(sender: CommandSender, target: Player) {
         val watch = byPlayer[target.uniqueId]
         if (watch == null || watch.controllerKey != senderKey(sender)) {
             sender.sendMini(
@@ -312,53 +308,24 @@ class WatchService(private val plugin: DillPlugin) {
                 watch.toldIdle = false
                 watch.lastReport = report
                 val threshold = threshold()
-                val flagged = report.flagged(threshold)
-                val change = VerdictChange.between(watch.lastFlagged, flagged)
-                watch.lastFlagged = flagged
 
-                // The live state moves every interval, even while clear, so
-                // the admin sees the numbers rather than a silent screen.
+                // The bar is a live view, not an event log: it changes every
+                // interval and never touches chat.
                 if (watch.display == Display.ACTION_BAR) {
                     watch.barLine = PredictionView.liveLine(watch.playerName, report, threshold)
                     refreshBar(watch.controllerKey)
+                    return@Runnable
                 }
 
-                // Chat speaks only when the verdict itself moves.
+                // A chat watch has no bar, so the full report is its only
+                // output. It still speaks only when the verdict moves.
+                val flagged = report.flagged(threshold)
+                val change = VerdictChange.between(watch.lastFlagged, flagged)
+                watch.lastFlagged = flagged
                 if (change.isQuiet) return@Runnable
-                notify(watch, announcement(watch, report, threshold, change))
+                notify(watch, PredictionView.render("Watch", watch.playerName, report, threshold))
             })
         })
-    }
-
-    /** One chat entry for a verdict change, in the detail the display allows. */
-    private fun announcement(
-        watch: Watch,
-        report: InferenceReport,
-        threshold: Double,
-        change: VerdictChange,
-    ): Component {
-        if (watch.display == Display.CHAT) {
-            return PredictionView.render("Watch", watch.playerName, report, threshold)
-        }
-
-        val text = Component.text().append(
-            PredictionView.changeLine(
-                subject = watch.playerName,
-                report = report,
-                entered = change.entered,
-                cleared = change.cleared,
-            ),
-        )
-        if (watch.controller is Player) {
-            text.append(separator()).append(
-                chatButton(
-                    "[Report]",
-                    "/dill watch report ${watch.playerName}",
-                    NamedTextColor.AQUA,
-                ),
-            )
-        }
-        return text.build()
     }
 
     /**

@@ -4,6 +4,7 @@ import com.dillway.DillPlugin
 import com.dillway.inference.FeatureExtractor
 import com.dillway.inference.InferenceWindows
 import com.dillway.inference.OnnxModel
+import com.dillway.isFlagged
 import com.dillway.recording.Recording
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -175,12 +176,15 @@ class ModelManager(private val plugin: DillPlugin) : AutoCloseable {
             merged.putAll(updates)
             replaceAll(merged)
 
+            plugin.metrics.modelRefreshFinished(loadedNow.size, failures.size)
+
             return RefreshReport(loadedNow.sortedBy { it.cheat }, failures)
         }
     }
 
     /** Runs every loaded specialist over one recording. */
-    fun infer(recording: Recording): InferenceReport {
+    fun infer(recording: Recording, threshold: Double): InferenceReport {
+        val started = System.nanoTime()
         val lock = stateLock.readLock()
         lock.lock()
         try {
@@ -195,6 +199,14 @@ class ModelManager(private val plugin: DillPlugin) : AutoCloseable {
                     failures += "$cheat: ${e.message ?: e.javaClass.simpleName}"
                 }
             }
+
+            plugin.metrics.inferenceFinished(
+                durationNanos = System.nanoTime() - started,
+                windows = verdicts.sumOf { it.windows },
+                verdicts = verdicts.size,
+                flagged = verdicts.count { it.isFlagged(threshold) },
+                failures = failures.size,
+            )
 
             return InferenceReport(
                 movementPackets = InferenceWindows.movementCount(recording.packets),

@@ -23,3 +23,8 @@ it dynamically.
 |  (paper)   | <--------------- |               | <---------------  |  (modal)  |
 +------------+    models down   +---------------+     artifacts     +-----------+
 ```
+
+## Training
+
+See [TRAINING.md](TRAINING.md) for the data collection, training, and
+deployment workflow.

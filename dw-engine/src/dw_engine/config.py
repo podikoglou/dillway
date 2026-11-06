@@ -36,7 +36,7 @@ DATASET_PREFIX = os.environ.get("DW_DATASET_PREFIX", "recordings")
 # models/<cheat>/latest.json points at the newest committed version.
 MODELS_PREFIX = "models"
 
-# --- Windowing (data-main/docs/DATASET.md) ----------------------------------
+# --- Windowing (TRAINING.md) -------------------------------------------------
 # Seconds of packets per training/inference window, per cheat. Reach uses
 # longer windows because attacks are sparse; add entries as cheats land.
 WINDOW_SECONDS = {

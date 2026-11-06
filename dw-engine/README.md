@@ -10,6 +10,9 @@ Training samples are windows sliced from sessions instead of whole
 sessions; scores carry grouped cross-validation by player, and the
 release gate is false flags per legit hour, not accuracy.
 
+The end-to-end workflow — collection, window choice, training, and model
+deployment — is in [../TRAINING.md](../TRAINING.md).
+
 ## Setup
 
 ```sh

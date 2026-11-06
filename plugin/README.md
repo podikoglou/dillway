@@ -3,6 +3,8 @@
 [Paper](https://papermc.io) plugin that records player activity and runs
 the trained anti-cheat specialists locally on the server.
 
+To turn recordings into a model, see [../TRAINING.md](../TRAINING.md).
+
 ## Admin flow
 
 1. Record a player with `/dill rec start`, stop with `/dill rec stop`. Chat

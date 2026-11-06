@@ -3,10 +3,10 @@
 v1 baseline: per-window summary statistics over movement packets
 (30 features, fixed order given by FEATURE_NAMES).
 
-Planned v2 (data-main/docs/ARCHITECTURE.md, 'physics residuals'):
-predict the next position from context (velocity, on_ground, gravity and
-drag) and feed aggregate residual statistics into the model. Keep each
-feature set as its own registry entry; a specialist trains on one set.
+Planned v2 (see TRAINING.md): physics residuals. Predict the next
+position from context (velocity, on_ground, gravity and drag) and feed
+aggregate residual statistics into the model. Keep each feature set as
+its own registry entry; a specialist trains on one set.
 """
 
 import math

@@ -1,16 +1,17 @@
-"""Model definition and honest evaluation (data-main/docs/ARCHITECTURE.md).
+"""Model definition and honest evaluation (TRAINING.md).
 
-Algorithm: RandomForest on engineered features (tree ensembles are the
-right tool at ~1000 samples; revisit sequence models at ~10k).
+Algorithm: RandomForest on engineered features. Tree ensembles fit the
+sample sizes typical of a small labeled dataset; revisit sequence models
+when the dataset grows much larger.
 
 Structure: one binary specialist per cheat (legit vs cheat-X), so legit
 data is reused across specialists and each cheat tunes its own features
-and thresholds. Multi-label detection works: a player running speed +
-killaura is flagged by both models.
+and thresholds. Multi-label detection works: a player running two cheats
+is flagged by both models.
 
-Evaluation rules from ANALYSIS.md: never split by window — split by
-player. GroupKFold is the only reported score, and the production gate
-is false flags per hour on legit data, not accuracy.
+Evaluation rules: never split by window — split by player. GroupKFold is
+the only reported score, and the production gate is false flags per hour
+on legit data, not accuracy.
 """
 
 import numpy as np

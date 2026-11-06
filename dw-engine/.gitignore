@@ -1,0 +1,19 @@
+# Virtualenv
+.venv/
+
+# Dataset (pulled from R2, never committed)
+data/
+converted/
+
+# Model artifacts
+target/
+
+# Credentials / secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Modal
+.modalignore

@@ -1,16 +1,12 @@
 package com.dillway
 
-import com.dillway.model.CheatVerdict
-import com.dillway.model.InferenceReport
 import com.dillway.recording.Recording
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.TextComponent
-import net.kyori.adventure.text.event.HoverEvent
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
-import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -35,7 +31,7 @@ class RecordingFlow(
 
     /** Shows the action menu for a just-stopped recording. */
     fun offer(sender: CommandSender, stopped: StoppedRecording) {
-        pending.put(key(sender), Pending(stopped))?.let { old ->
+        pending.put(senderKey(sender), Pending(stopped))?.let { old ->
             plugin.logger.warning(
                 "Discarded unresolved recording of ${old.stopped.playerName} " +
                     "when a new one stopped",
@@ -75,13 +71,13 @@ class RecordingFlow(
 
     /** Opens the multi-select label menu. */
     fun train(sender: CommandSender) {
-        val entry = pending[key(sender)] ?: return noPending(sender)
+        val entry = pending[senderKey(sender)] ?: return noPending(sender)
         sendLabelMenu(sender, entry)
     }
 
     /** Toggles one label, keeping `legit` exclusive of cheats. */
     fun toggleLabel(sender: CommandSender, rawLabel: String) {
-        val entry = pending[key(sender)] ?: return noPending(sender)
+        val entry = pending[senderKey(sender)] ?: return noPending(sender)
         val label = Labels.normalize(rawLabel)
 
         if (label !in plugin.availableLabels()) {
@@ -106,12 +102,12 @@ class RecordingFlow(
 
     /** Writes one parquet per selected label, off the main thread. */
     fun save(sender: CommandSender) {
-        val senderKey = key(sender)
-        val entry = pending.remove(senderKey) ?: return noPending(sender)
+        val ownerKey = senderKey(sender)
+        val entry = pending.remove(ownerKey) ?: return noPending(sender)
         val labels = entry.labels.toList()
 
         if (labels.isEmpty()) {
-            pending[senderKey] = entry
+            pending[ownerKey] = entry
             sender.sendMini("<red>Select at least one label first.</red>")
             return
         }
@@ -162,11 +158,11 @@ class RecordingFlow(
 
     /** Runs every loaded specialist over the recording, off the main thread. */
     fun predict(sender: CommandSender) {
-        val senderKey = key(sender)
-        val entry = pending.remove(senderKey) ?: return noPending(sender)
+        val ownerKey = senderKey(sender)
+        val entry = pending.remove(ownerKey) ?: return noPending(sender)
 
         if (plugin.models.summary().isEmpty()) {
-            pending[senderKey] = entry
+            pending[ownerKey] = entry
             sender.sendMini("<red>No models are loaded. Run <white>/dill models reload</white>.</red>")
             return
         }
@@ -193,7 +189,14 @@ class RecordingFlow(
                 if (report == null) {
                     sender.sendMini("<red>Inference failed. See the server log.</red>")
                 } else {
-                    sendReport(sender, entry.stopped.playerName, report)
+                    sender.sendMessage(
+                        PredictionView.render(
+                            kind = "Prediction",
+                            playerName = entry.stopped.playerName,
+                            report = report,
+                            threshold = plugin.config.getDouble("prediction.threshold", 0.5),
+                        ),
+                    )
                 }
             }
         })
@@ -201,7 +204,7 @@ class RecordingFlow(
 
     /** Drops the pending recording. */
     fun discard(sender: CommandSender) {
-        val entry = pending.remove(key(sender)) ?: return noPending(sender)
+        val entry = pending.remove(senderKey(sender)) ?: return noPending(sender)
         sender.sendMini(
             "<gray>Discarded recording of <yellow><player></yellow>.</gray>",
             Placeholder.unparsed("player", entry.stopped.playerName),
@@ -263,111 +266,6 @@ class RecordingFlow(
         sender.sendMessage(text.build())
     }
 
-    private fun sendReport(sender: CommandSender, playerName: String, report: InferenceReport) {
-        val threshold = plugin.config.getDouble("prediction.threshold", 0.5)
-        val rows = report.verdicts.sortedWith(
-            compareByDescending<CheatVerdict> { it.isFlagged(threshold) }
-                .thenByDescending { it.maxProbability },
-        )
-        val flagged = rows.count { it.isFlagged(threshold) }
-        val thresholdText = percent(threshold).removeSuffix(".0")
-
-        val text = Component.text()
-            .append(
-                mini(
-                    "<gray>Prediction <dark_gray>·</dark_gray> <yellow><player></yellow> " +
-                        "<dark_gray>·</dark_gray> <aqua><packets></aqua> packets " +
-                        "<dark_gray>·</dark_gray> <aqua><models></aqua> models</gray>",
-                    Placeholder.unparsed("player", playerName),
-                    Placeholder.unparsed("packets", count(report.movementPackets)),
-                    Placeholder.unparsed("models", report.modelCount.toString()),
-                ),
-            )
-
-        // The headline answers the only question the admin asks first: did
-        // anything trip the threshold?
-        text.append(Component.newline()).append(
-            if (flagged == 0) {
-                mini(
-                    "<green>No model flagged</green> <dark_gray>· threshold <threshold>%</dark_gray>",
-                    Placeholder.unparsed("threshold", thresholdText),
-                )
-            } else {
-                mini(
-                    "<red><flagged> of <models> flagged</red> " +
-                        "<dark_gray>· threshold <threshold>%</dark_gray>",
-                    Placeholder.unparsed("flagged", flagged.toString()),
-                    Placeholder.unparsed("models", report.modelCount.toString()),
-                    Placeholder.unparsed("threshold", thresholdText),
-                )
-            },
-        )
-
-        for (verdict in rows) {
-            text.append(Component.newline()).append(verdictLine(verdict, threshold))
-        }
-
-        for (failure in report.failures) {
-            text.append(Component.newline()).append(
-                mini("<red>! <failure></red>", Placeholder.unparsed("failure", failure)),
-            )
-        }
-
-        sender.sendMessage(text.build())
-    }
-
-    /** One model per line: verdict, name, then diagnostics, dimmest last. */
-    private fun verdictLine(verdict: CheatVerdict, threshold: Double): Component {
-        val flagged = verdict.isFlagged(threshold)
-        val text = Component.text()
-            .append(Component.text("  "))
-            .append(
-                Component.text(
-                    if (flagged) "FLAGGED" else "clear",
-                    if (flagged) NamedTextColor.RED else NamedTextColor.GRAY,
-                ),
-            )
-            .append(Component.text(" "))
-            .append(
-                Component.text(verdict.cheat, NamedTextColor.WHITE).hoverEvent(
-                    HoverEvent.showText(
-                        mini(
-                            "model <version> <dark_gray>·</dark_gray> <window>s window",
-                            Placeholder.unparsed("version", verdict.version),
-                            Placeholder.unparsed("window", number(verdict.windowSeconds)),
-                        ),
-                    ),
-                ),
-            )
-            .append(Component.text("  "))
-
-        if (verdict.windows == 0) {
-            return text.append(
-                Component.text("no usable windows", NamedTextColor.DARK_GRAY),
-            ).build()
-        }
-
-        return text
-            .append(
-                Component.text(
-                    "${percent(verdict.maxProbability)}% peak",
-                    if (flagged) NamedTextColor.RED else NamedTextColor.WHITE,
-                ),
-            )
-            .append(dot())
-            .append(
-                Component.text("avg ${percent(verdict.meanProbability)}%", NamedTextColor.GRAY),
-            )
-            .append(dot())
-            .append(
-                Component.text("${verdict.windows} windows", NamedTextColor.GRAY),
-            )
-            .build()
-    }
-
-    private fun CheatVerdict.isFlagged(threshold: Double): Boolean =
-        windows > 0 && maxProbability >= threshold
-
     private fun appendList(
         text: TextComponent.Builder,
         title: String,
@@ -392,10 +290,4 @@ class RecordingFlow(
         if (!plugin.isEnabled) return
         plugin.server.scheduler.runTask(plugin, Runnable { action() })
     }
-
-    private fun key(sender: CommandSender): String =
-        (sender as? Player)?.uniqueId?.toString() ?: "console:${sender.name}"
-
-    private fun percent(value: Double): String =
-        String.format(Locale.ROOT, "%.1f", value * 100.0)
 }

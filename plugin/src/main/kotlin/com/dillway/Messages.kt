@@ -7,6 +7,7 @@ import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.minimessage.MiniMessage
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
 import org.bukkit.command.CommandSender
+import org.bukkit.entity.Player
 import java.util.Locale
 
 private val MINI = MiniMessage.miniMessage()
@@ -17,6 +18,10 @@ fun count(value: Int): String = String.format(Locale.ROOT, "%,d", value)
 /** `2.0` becomes `2`: chat numbers without noise zeros. */
 fun number(value: Double): String =
     if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
+
+/** Stable identity for a sender across chat-button commands. */
+fun senderKey(sender: CommandSender): String =
+    (sender as? Player)?.uniqueId?.toString() ?: "console:${sender.name}"
 
 fun CommandSender.sendMini(template: String, vararg resolvers: TagResolver) {
     sendMessage(MINI.deserialize(template, *resolvers))

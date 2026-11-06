@@ -26,8 +26,11 @@ class RecordingFlow(private val plugin: DillPlugin) {
     /** IDs with a save in flight, so a double click cannot race itself. */
     private val saving = ConcurrentHashMap.newKeySet<Long>()
 
-    /** Writes the stopped session, then offers the actions for its ID. */
-    fun stopped(sender: CommandSender, stopped: StoppedRecording) {
+    /**
+     * Writes the stopped session. With [label] the session is saved under that
+     * type at once, for the kit; without it the admin gets the action menu.
+     */
+    fun stopped(sender: CommandSender, stopped: StoppedRecording, label: String? = null) {
         plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
             val id = plugin.recordings.saveStaging(stopped)
             sync(sender) {
@@ -35,7 +38,11 @@ class RecordingFlow(private val plugin: DillPlugin) {
                     sender.sendMini("<red>Could not save the recording. See the server log.</red>")
                     return@sync
                 }
-                offer(sender, id, stopped.playerName)
+                if (label == null) {
+                    offer(sender, id, stopped.playerName)
+                } else {
+                    save(sender, id, confirmed = true, label = label)
+                }
             }
         })
     }
@@ -88,13 +95,7 @@ class RecordingFlow(private val plugin: DillPlugin) {
         val selected = selections.computeIfAbsent(id) { linkedSetOf(Labels.LEGIT) }
         if (rawLabel != null) {
             val label = Labels.normalize(rawLabel)
-            if (label !in plugin.availableLabels()) {
-                sender.sendMini(
-                    "<red>Unknown label <white><label></white>.</red>",
-                    Placeholder.unparsed("label", rawLabel),
-                )
-                return
-            }
+            if (label !in plugin.availableLabels()) return unknownLabel(sender, rawLabel)
 
             if (label == Labels.LEGIT) {
                 selected.clear()
@@ -113,9 +114,23 @@ class RecordingFlow(private val plugin: DillPlugin) {
      * Writes one copy per selected label. A copy of the same ID under any
      * other label, locally or in the bucket, needs an explicit confirm; the
      * confirmed save replaces the old label set instead of adding to it.
+     *
+     * A non-null [label] replaces the in-memory selection with that one type,
+     * so `/dill rec save <id> <label>` and the kit can save non-interactively.
      */
-    fun save(sender: CommandSender, id: Long, confirmed: Boolean) {
+    fun save(
+        sender: CommandSender,
+        id: Long,
+        confirmed: Boolean,
+        label: String? = null,
+    ) {
         if (!plugin.recordings.exists(id)) return unknown(sender, id)
+
+        if (label != null) {
+            val normalized = Labels.normalize(label)
+            if (normalized !in plugin.availableLabels()) return unknownLabel(sender, label)
+            selections[id] = linkedSetOf(normalized)
+        }
 
         val selected = selections[id]?.toList() ?: listOf(Labels.LEGIT)
         if (!saving.add(id)) {
@@ -319,6 +334,13 @@ class RecordingFlow(private val plugin: DillPlugin) {
         sender.sendMini(
             "<red>Unknown recording <aqua><id></aqua>.</red>",
             Placeholder.unparsed("id", id.toString()),
+        )
+    }
+
+    private fun unknownLabel(sender: CommandSender, label: String) {
+        sender.sendMini(
+            "<red>Unknown label <white><label></white>.</red>",
+            Placeholder.unparsed("label", label),
         )
     }
 

@@ -39,3 +39,10 @@ s3:
   # Recording object keys are <key-prefix>/<label>/<started>.parquet, with the
   # label grouping legit and cheat sessions. Empty prefix drops the level.
   key-prefix: "recordings"
+  # `/dill compact` merges small session objects into shards. Each label
+  # directory is compacted on its own, and labels run one after another.
+  compaction:
+    # Recordings per shard. Keep a shard small enough to read during training.
+    recordings-per-shard: 50
+    # Objects downloaded at the same time inside one batch.
+    download-concurrency: 4

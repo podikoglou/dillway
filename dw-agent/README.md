@@ -38,7 +38,8 @@ and saves it straight under the type shown by the selector, with no menu.
 The selector cycles through `legit` and every known cheat, and keeps its
 choice inside the item, so it survives moving or dropping. The items never
 move: the recorder changes its look in place, so the same slot is also the
-stop button. A player who is watched cannot start a recording from the kit.
+stop button. Recording and watching are independent: a watched player can
+still start a recording from the kit.
 
 `/dill rec stop` still opens the interactive save menu. `/dill rec save
 <id> <label>` saves an existing recording under one type from chat or the
@@ -63,8 +64,8 @@ full report when a verdict changes; `watch.display` in the config selects
 that chat-only mode for players too.
 
 A watch writes nothing to disk and ends when the player leaves, when its
-last viewer stops it, or at shutdown. A player cannot be recorded and
-watched at the same time: stop the other mode first.
+last viewer stops it, or at shutdown. Recording and watching do not affect
+each other: a player can be recorded and watched at the same time.
 
 ## Predictions
 

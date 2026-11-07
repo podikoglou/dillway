@@ -14,14 +14,19 @@ import java.util.UUID
 import kotlin.math.roundToLong
 
 /**
- * Live predictions for one player.
+ * Live predictions for watched players.
  *
  * Packets arrive through `DillListener`, the same pipeline that feeds
  * recordings. A player cannot be recorded and watched at the same time, so
  * the two modes never share a player. A repeating task takes a rolling tail
  * of the buffer — long enough for the longest loaded window — and runs the
  * specialists off the main thread. A watch is ephemeral: it writes nothing
- * to disk and is dropped on quit, `/dill watch stop`, or shutdown.
+ * to disk and ends when the player leaves, when the last viewer stops, or at
+ * shutdown.
+ *
+ * A watch belongs to the watched player, not to the admin. Any number of
+ * admins can watch the same player, and one admin can watch several players;
+ * everyone watching a player sees the same shared buffer and prediction.
  *
  * The live state goes to the action bar, which overwrites itself, so a watch
  * is silent in chat. Chat output exists only in `chat` mode and for consoles,
@@ -37,16 +42,32 @@ class WatchService(private val plugin: DwAgentPlugin) {
     /** Where live state goes between verdict changes. */
     private enum class Display { ACTION_BAR, CHAT }
 
+    /** One admin's view of one watch. */
+    private class Subscriber(
+        val controller: CommandSender,
+        val controllerKey: String,
+        val display: Display,
+    ) {
+        /** Last action bar line, re-sent by the controller's bar timer. */
+        var barLine: Component? = null
+
+        /** Cheats over the threshold at the last inference, for chat mode. */
+        var lastFlagged: Set<String> = emptySet()
+    }
+
+    /**
+     * One watched player, shared by every subscriber. The buffer and the
+     * inference task belong to the player, so two admins watching the same
+     * player cost one prediction.
+     */
     private class Watch(
         val playerId: UUID,
         val playerName: String,
-        val controller: CommandSender,
-        val controllerKey: String,
         val started: Long,
         val intervalMs: Long,
-        val display: Display,
     ) {
         val packets = ArrayDeque<RecordedPacket>()
+        val subscribers = LinkedHashMap<String, Subscriber>()
         var task: BukkitTask? = null
 
         /** True while an inference for this watch is in flight. */
@@ -55,14 +76,8 @@ class WatchService(private val plugin: DwAgentPlugin) {
         /** Set after the idle notice, so it is not repeated every tick. */
         var toldIdle = false
 
-        /** Last action bar line, re-sent by the controller's bar timer. */
-        var barLine: Component? = null
-
-        /** Newest full report, for the report button and the stop summary. */
+        /** Newest full report, for new subscribers, the report button and the stop summary. */
         var lastReport: InferenceReport? = null
-
-        /** Cheats over the threshold at the last inference. */
-        var lastFlagged: Set<String> = emptySet()
     }
 
     private val byPlayer = HashMap<UUID, Watch>()
@@ -70,7 +85,7 @@ class WatchService(private val plugin: DwAgentPlugin) {
     /**
      * One action bar timer per controller. The client fades the action bar
      * after a couple of seconds, so it must be repeated between predictions.
-     * Watches that share a controller share the timer and the line.
+     * A controller watching several players has them all on that one line.
      */
     private val barTasks = HashMap<String, BukkitTask>()
 
@@ -84,39 +99,179 @@ class WatchService(private val plugin: DwAgentPlugin) {
         byPlayer[playerId]?.packets?.addLast(packet)
     }
 
-    /** Starts a watch, or tells the sender why it cannot start. */
+    /** Starts a watch for this sender, or tells them why it cannot start. */
     fun start(sender: CommandSender, player: Player) {
-        if (byPlayer.containsKey(player.uniqueId)) {
+        val key = senderKey(sender)
+        val existing = byPlayer[player.uniqueId]
+
+        if (existing != null && key in existing.subscribers) {
             sender.sendMini(
-                "<red><player> is already being watched.</red>",
+                "<red>You are already watching <player>.</red>",
                 Placeholder.unparsed("player", player.name),
-            )
-            return
-        }
-        if (plugin.isRecording(player)) {
-            sender.sendMini(
-                "<red><player> is being recorded. Stop the recording first.</red>",
-                Placeholder.unparsed("player", player.name),
-            )
-            return
-        }
-        if (plugin.models.summary().isEmpty()) {
-            sender.sendMini(
-                "<red>No models are loaded. Run <white>/dill models reload</white>.</red>",
             )
             return
         }
 
+        if (existing == null) {
+            if (plugin.isRecording(player)) {
+                sender.sendMini(
+                    "<red><player> is being recorded. Stop the recording first.</red>",
+                    Placeholder.unparsed("player", player.name),
+                )
+                return
+            }
+            if (plugin.models.summary().isEmpty()) {
+                sender.sendMini(
+                    "<red>No models are loaded. Run <white>/dill models reload</white>.</red>",
+                )
+                return
+            }
+        }
+
+        val watch = existing ?: newWatch(player)
+        val subscriber = Subscriber(
+            controller = sender,
+            controllerKey = key,
+            display = display(sender),
+        )
+        watch.subscribers[key] = subscriber
+
+        // A late viewer starts with the newest state instead of an empty bar.
+        watch.lastReport?.let { report ->
+            if (subscriber.display == Display.ACTION_BAR) {
+                subscriber.barLine =
+                    PredictionView.liveLine(watch.playerName, report, plugin.threshold())
+            }
+        }
+        if (subscriber.display == Display.ACTION_BAR) {
+            ensureBar(subscriber)
+            refreshBar(key)
+        }
+
+        sendWelcome(sender, player)
+    }
+
+    /**
+     * Stops one watch of this sender, or every watch they control when
+     * [target] is null. The watch itself continues while another admin still
+     * watches the same player. The last report of each stopped watch is
+     * printed, so the stop leaves a record behind.
+     */
+    fun stop(sender: CommandSender, target: Player?) {
+        val key = senderKey(sender)
+
+        if (target != null) {
+            val watch = byPlayer[target.uniqueId]
+            val subscriber = watch?.subscribers?.get(key)
+            if (watch == null || subscriber == null) {
+                sender.sendMini(
+                    "<red>You are not watching <player>.</red>",
+                    Placeholder.unparsed("player", target.name),
+                )
+                return
+            }
+
+            val report = watch.lastReport
+            unsubscribe(watch, subscriber)
+            sender.sendMini(
+                "<gray>Stopped watching <yellow><player></yellow>.</gray>",
+                Placeholder.unparsed("player", target.name),
+            )
+            report?.let {
+                sender.sendMessage(
+                    PredictionView.render("Watch", watch.playerName, it, plugin.threshold()),
+                )
+            }
+            return
+        }
+
+        val mine = byPlayer.values.mapNotNull { watch ->
+            watch.subscribers[key]?.let { watch to it }
+        }
+        if (mine.isEmpty()) {
+            sender.sendMini("<red>You are not watching any player.</red>")
+            return
+        }
+
+        val names = mine.map { it.first.playerName }
+        val reports = mine.mapNotNull { (watch, _) ->
+            watch.lastReport?.let { watch.playerName to it }
+        }
+        mine.forEach { (watch, subscriber) -> unsubscribe(watch, subscriber) }
+
+        sender.sendMini(
+            "<gray>Stopped watching <yellow><players></yellow>.</gray>",
+            Placeholder.unparsed("players", names.joinToString(", ")),
+        )
+        reports.forEach { (name, report) ->
+            sender.sendMessage(
+                PredictionView.render("Watch", name, report, plugin.threshold()),
+            )
+        }
+    }
+
+    /** Prints the newest full report of one watch, from the `[Details]` button. */
+    fun details(sender: CommandSender, target: Player) {
+        val watch = byPlayer[target.uniqueId]
+        if (watch == null || senderKey(sender) !in watch.subscribers) {
+            sender.sendMini(
+                "<red>You are not watching <player>.</red>",
+                Placeholder.unparsed("player", target.name),
+            )
+            return
+        }
+
+        val report = watch.lastReport
+        if (report == null) {
+            sender.sendMini(
+                "<gray>No prediction for <yellow><player></yellow> yet.</gray>",
+                Placeholder.unparsed("player", target.name),
+            )
+            return
+        }
+
+        sender.sendMessage(
+            PredictionView.render("Watch", watch.playerName, report, plugin.threshold()),
+        )
+    }
+
+    /**
+     * Ends watches on a player who left, and drops the subscriptions of an
+     * admin who left. The other viewers of a shared watch stay.
+     */
+    fun playerQuit(player: Player) {
+        byPlayer[player.uniqueId]?.let { watch ->
+            val subscribers = watch.subscribers.values.toList()
+            remove(watch)
+            val text = mini(
+                "<gray><player> left. Watch stopped.</gray>",
+                Placeholder.unparsed("player", watch.playerName),
+            )
+            subscribers.forEach { notify(it, text) }
+        }
+
+        val key = senderKey(player)
+        byPlayer.values.mapNotNull { watch ->
+            watch.subscribers[key]?.let { watch to it }
+        }.forEach { (watch, subscriber) -> unsubscribe(watch, subscriber) }
+    }
+
+    /** Cancels every tick on shutdown; buffers are discarded. */
+    fun stopAll() {
+        byPlayer.values.toList().forEach { remove(it) }
+        barTasks.values.forEach { it.cancel() }
+        barTasks.clear()
+        byPlayer.clear()
+    }
+
+    private fun newWatch(player: Player): Watch {
         val interval = plugin.config.getDouble("watch.interval-seconds", 5.0)
             .coerceIn(1.0, 60.0)
         val watch = Watch(
             playerId = player.uniqueId,
             playerName = player.name,
-            controller = sender,
-            controllerKey = senderKey(sender),
             started = System.currentTimeMillis(),
             intervalMs = (interval * 1000.0).roundToLong(),
-            display = display(sender),
         )
         byPlayer[player.uniqueId] = watch
         plugin.metrics.watchStarted()
@@ -128,8 +283,10 @@ class WatchService(private val plugin: DwAgentPlugin) {
             ticks,
             ticks,
         )
-        if (watch.display == Display.ACTION_BAR) ensureBar(watch)
+        return watch
+    }
 
+    private fun sendWelcome(sender: CommandSender, player: Player) {
         val text = Component.text().append(
             mini(
                 "<green>Watching <yellow><player></yellow>.</green>",
@@ -154,113 +311,6 @@ class WatchService(private val plugin: DwAgentPlugin) {
         sender.sendMessage(text.build())
     }
 
-    /**
-     * Stops one watch, or every watch this sender controls when [target] is
-     * null. Watches belong to the admin who started them. The last report of
-     * each stopped watch is printed, so the stop leaves a record behind.
-     */
-    fun stop(sender: CommandSender, target: Player?) {
-        val ownerKey = senderKey(sender)
-        val targets = if (target != null) {
-            listOfNotNull(byPlayer[target.uniqueId])
-        } else {
-            byPlayer.values.filter { it.controllerKey == ownerKey }
-        }
-
-        if (targets.isEmpty()) {
-            if (target == null) {
-                sender.sendMini("<red>You are not watching any player.</red>")
-            } else {
-                sender.sendMini(
-                    "<red><player> is not being watched.</red>",
-                    Placeholder.unparsed("player", target.name),
-                )
-            }
-            return
-        }
-
-        if (target != null && targets.any { it.controllerKey != ownerKey }) {
-            sender.sendMini(
-                "<red><player> is watched by another admin.</red>",
-                Placeholder.unparsed("player", target.name),
-            )
-            return
-        }
-
-        val names = targets.map { it.playerName }
-        val predictions = targets.mapNotNull { watch ->
-            watch.lastReport?.let { watch.playerName to it }
-        }
-        targets.forEach { remove(it) }
-
-        sender.sendMini(
-            "<gray>Stopped watching <yellow><players></yellow>.</gray>",
-            Placeholder.unparsed("players", names.joinToString(", ")),
-        )
-        predictions.forEach { (name, report) ->
-            sender.sendMessage(
-                PredictionView.render("Watch", name, report, plugin.threshold()),
-            )
-        }
-    }
-
-    /** Prints the newest full report of one watch, from the `[Details]` button. */
-    fun details(sender: CommandSender, target: Player) {
-        val watch = byPlayer[target.uniqueId]
-        if (watch == null || watch.controllerKey != senderKey(sender)) {
-            sender.sendMini(
-                "<red><player> is not being watched by you.</red>",
-                Placeholder.unparsed("player", target.name),
-            )
-            return
-        }
-
-        val report = watch.lastReport
-        if (report == null) {
-            sender.sendMini(
-                "<gray>No prediction for <yellow><player></yellow> yet.</gray>",
-                Placeholder.unparsed("player", target.name),
-            )
-            return
-        }
-
-        sender.sendMessage(
-            PredictionView.render("Watch", watch.playerName, report, plugin.threshold()),
-        )
-    }
-
-    /**
-     * Ends watches on a player who left, and watches controlled by an admin
-     * who left: their reports would have nowhere to go.
-     */
-    fun playerQuit(player: Player) {
-        val affected = byPlayer.values.filter { watch ->
-            watch.playerId == player.uniqueId ||
-                (watch.controller as? Player)?.uniqueId == player.uniqueId
-        }
-
-        for (watch in affected) {
-            remove(watch)
-            if (watch.playerId == player.uniqueId) {
-                notify(
-                    watch,
-                    mini(
-                        "<gray><player> left. Watch stopped.</gray>",
-                        Placeholder.unparsed("player", watch.playerName),
-                    ),
-                )
-            }
-        }
-    }
-
-    /** Cancels every tick on shutdown; buffers are discarded. */
-    fun stopAll() {
-        byPlayer.values.toList().forEach { remove(it) }
-        barTasks.values.forEach { it.cancel() }
-        barTasks.clear()
-        byPlayer.clear()
-    }
-
     private fun tick(watch: Watch) {
         prune(watch)
         if (watch.busy) return
@@ -271,14 +321,17 @@ class WatchService(private val plugin: DwAgentPlugin) {
                 watch.toldIdle = true
                 // Stop repeating the last line: the numbers no longer describe
                 // the current state, and the idle notice says why.
-                watch.barLine = null
-                notify(
-                    watch,
-                    mini(
-                        "<gray>Waiting for movement from <yellow><player></yellow>…</gray>",
-                        Placeholder.unparsed("player", watch.playerName),
-                    ),
+                val idle = mini(
+                    "<gray>Waiting for movement from <yellow><player></yellow>…</gray>",
+                    Placeholder.unparsed("player", watch.playerName),
                 )
+                for (subscriber in watch.subscribers.values) {
+                    subscriber.barLine = null
+                    if (subscriber.display == Display.ACTION_BAR) {
+                        refreshBar(subscriber.controllerKey)
+                    }
+                    notify(subscriber, idle)
+                }
             }
             return
         }
@@ -306,28 +359,34 @@ class WatchService(private val plugin: DwAgentPlugin) {
             if (!plugin.isEnabled) return@Runnable
             plugin.server.scheduler.runTask(plugin, Runnable {
                 watch.busy = false
-                // The admin may have stopped the watch while inference ran.
+                // Every viewer may have stopped while inference ran.
                 if (byPlayer[watch.playerId] !== watch || report == null) return@Runnable
 
                 watch.toldIdle = false
                 watch.lastReport = report
                 val threshold = plugin.threshold()
-
-                // The bar is a live view, not an event log: it changes every
-                // interval and never touches chat.
-                if (watch.display == Display.ACTION_BAR) {
-                    watch.barLine = PredictionView.liveLine(watch.playerName, report, threshold)
-                    refreshBar(watch.controllerKey)
-                    return@Runnable
-                }
-
-                // A chat watch has no bar, so the full report is its only
-                // output. It still speaks only when the verdict moves.
                 val flagged = report.flagged(threshold)
-                val change = VerdictChange.between(watch.lastFlagged, flagged)
-                watch.lastFlagged = flagged
-                if (change.isQuiet) return@Runnable
-                notify(watch, PredictionView.render("Watch", watch.playerName, report, threshold))
+
+                for (subscriber in watch.subscribers.values) {
+                    // The bar is a live view, not an event log: it changes
+                    // every interval and never touches chat.
+                    if (subscriber.display == Display.ACTION_BAR) {
+                        subscriber.barLine =
+                            PredictionView.liveLine(watch.playerName, report, threshold)
+                        refreshBar(subscriber.controllerKey)
+                        continue
+                    }
+
+                    // A chat watch has no bar, so the full report is its only
+                    // output. It still speaks only when the verdict moves.
+                    val change = VerdictChange.between(subscriber.lastFlagged, flagged)
+                    subscriber.lastFlagged = flagged
+                    if (change.isQuiet) continue
+                    notify(
+                        subscriber,
+                        PredictionView.render("Watch", watch.playerName, report, threshold),
+                    )
+                }
             })
         })
     }
@@ -345,10 +404,20 @@ class WatchService(private val plugin: DwAgentPlugin) {
         }
     }
 
+    /** Drops one viewer; the watch itself ends with its last viewer. */
+    private fun unsubscribe(watch: Watch, subscriber: Subscriber) {
+        watch.subscribers.remove(subscriber.controllerKey)
+        releaseBar(subscriber)
+        if (watch.subscribers.isEmpty()) remove(watch)
+    }
+
     private fun remove(watch: Watch) {
         watch.task?.cancel()
-        byPlayer.remove(watch.playerId)
-        releaseBar(watch)
+        if (byPlayer.remove(watch.playerId) == null) return
+
+        val subscribers = watch.subscribers.values.toList()
+        watch.subscribers.clear()
+        subscribers.forEach { releaseBar(it) }
     }
 
     private fun display(sender: CommandSender): Display {
@@ -359,11 +428,11 @@ class WatchService(private val plugin: DwAgentPlugin) {
     }
 
     /** Starts the controller's bar timer, if it does not run already. */
-    private fun ensureBar(watch: Watch) {
-        if (watch.controllerKey in barTasks) return
-        barTasks[watch.controllerKey] = plugin.server.scheduler.runTaskTimer(
+    private fun ensureBar(subscriber: Subscriber) {
+        if (subscriber.controllerKey in barTasks) return
+        barTasks[subscriber.controllerKey] = plugin.server.scheduler.runTaskTimer(
             plugin,
-            Runnable { refreshBar(watch.controllerKey) },
+            Runnable { refreshBar(subscriber.controllerKey) },
             BAR_REFRESH_TICKS,
             BAR_REFRESH_TICKS,
         )
@@ -371,25 +440,28 @@ class WatchService(private val plugin: DwAgentPlugin) {
 
     /**
      * Re-sends the action bar of one controller, sorted by player name so the
-     * order does not jump between predictions.
+     * order does not jump between predictions. The controller may watch
+     * several players.
      */
     private fun refreshBar(controllerKey: String) {
-        val watches = byPlayer.values
-            .filter {
-                it.display == Display.ACTION_BAR &&
-                    it.controllerKey == controllerKey &&
-                    it.barLine != null
+        val lines = byPlayer.values
+            .mapNotNull { watch ->
+                val subscriber = watch.subscribers[controllerKey] ?: return@mapNotNull null
+                if (subscriber.display != Display.ACTION_BAR) return@mapNotNull null
+                subscriber.barLine?.let { watch.playerName to it }
             }
-            .sortedBy { it.playerName }
-        if (watches.isEmpty()) return
+            .sortedBy { it.first }
+        if (lines.isEmpty()) return
 
-        val player = watches.first().controller as? Player ?: return
+        val controller = byPlayer.values
+            .firstNotNullOfOrNull { it.subscribers[controllerKey]?.controller }
+            ?: return
+        val player = controller as? Player ?: return
         if (!player.isOnline) return
 
         val text = Component.text()
         var started = false
-        for (watch in watches) {
-            val line = watch.barLine ?: continue
+        for ((_, line) in lines) {
             if (started) text.append(separator())
             text.append(line)
             started = true
@@ -397,25 +469,25 @@ class WatchService(private val plugin: DwAgentPlugin) {
         if (started) player.sendActionBar(text.build())
     }
 
-    /** Drops a stopped watch from its controller's bar, or clears the bar. */
-    private fun releaseBar(watch: Watch) {
-        if (watch.display != Display.ACTION_BAR) return
+    /** Drops one ended subscription from its controller's bar, or clears it. */
+    private fun releaseBar(subscriber: Subscriber) {
+        if (subscriber.display != Display.ACTION_BAR) return
 
-        val shared = byPlayer.values.any {
-            it.display == Display.ACTION_BAR && it.controllerKey == watch.controllerKey
+        val shared = byPlayer.values.any { watch ->
+            watch.subscribers[subscriber.controllerKey]?.display == Display.ACTION_BAR
         }
         if (shared) {
-            refreshBar(watch.controllerKey)
+            refreshBar(subscriber.controllerKey)
             return
         }
 
-        barTasks.remove(watch.controllerKey)?.cancel()
-        val player = watch.controller as? Player ?: return
+        barTasks.remove(subscriber.controllerKey)?.cancel()
+        val player = subscriber.controller as? Player ?: return
         if (player.isOnline) player.sendActionBar(Component.text(""))
     }
 
-    private fun notify(watch: Watch, component: Component) {
-        val sender = watch.controller
+    private fun notify(subscriber: Subscriber, component: Component) {
+        val sender = subscriber.controller
         if (sender is Player && !sender.isOnline) return
         sender.sendMessage(component)
     }

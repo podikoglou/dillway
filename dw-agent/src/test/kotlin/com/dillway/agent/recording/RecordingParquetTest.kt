@@ -106,6 +106,41 @@ class RecordingParquetTest {
     }
 
     @Test
+    fun `several recordings share one file with their own headers`() {
+        val dir = Files.createTempDirectory("dillway-shard")
+        val file = dir.resolve("compacted-1-2.parquet").toFile()
+        val second = recording.copy(
+            id = recording.id + 1,
+            started = recording.id + 1,
+            player = "11111111-2222-3333-4444-555555555555",
+            label = "speed",
+            packets = recording.packets.take(1),
+        )
+
+        RecordingParquet.writeRecordings(file, listOf(recording, second))
+
+        ParquetFileReader.open(InputFile.of(file.toPath())).use { reader ->
+            reader.rowReader().use { rows ->
+                // The first recording keeps its header for all of its rows.
+                repeat(3) {
+                    assertTrue(rows.hasNext())
+                    rows.next()
+                    assertHeader(rows)
+                }
+
+                // The next row starts the second recording.
+                assertTrue(rows.hasNext())
+                rows.next()
+                assertEquals(recording.id + 1, rows.getLong("id"))
+                assertEquals(recording.id + 1, rows.getLong("started"))
+                assertEquals("11111111-2222-3333-4444-555555555555", rows.getString("player"))
+                assertEquals("SPEED", rows.getString("recording_type"))
+                assertEquals(false, rows.hasNext())
+            }
+        }
+    }
+
+    @Test
     fun `recording survives a write and read round trip`() {
         val dir = Files.createTempDirectory("dillway-round-trip")
         val file = dir.resolve("${recording.id}.parquet").toFile()

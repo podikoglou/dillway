@@ -46,7 +46,7 @@ class RecordingCompactor(private val plugin: DwAgentPlugin) {
                 plugin.logger.severe(
                     "Compaction failed: ${e.message ?: e.javaClass.simpleName}",
                 )
-                Report(failed = listOf("run"))
+                Report(crashed = true)
             } finally {
                 running.set(false)
             }
@@ -294,6 +294,10 @@ class RecordingCompactor(private val plugin: DwAgentPlugin) {
     private fun announce(sender: CommandSender, report: Report) {
         if (!plugin.isEnabled) return
         plugin.server.scheduler.runTask(plugin, Runnable {
+            if (report.crashed) {
+                sender.sendMini("<red>Compaction failed. See the server log.</red>")
+                return@Runnable
+            }
             if (report.shards == 0 && report.failed.isEmpty()) {
                 sender.sendMini("<gray>Nothing to compact.</gray>")
                 return@Runnable
@@ -336,6 +340,7 @@ class RecordingCompactor(private val plugin: DwAgentPlugin) {
         val shards: Int = 0,
         val recordings: Int = 0,
         val failed: List<String> = emptyList(),
+        val crashed: Boolean = false,
     )
 
     private data class LabelResult(

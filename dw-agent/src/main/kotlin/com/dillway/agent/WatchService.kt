@@ -47,9 +47,6 @@ class WatchService(private val plugin: DwAgentPlugin) {
         val controllerKey: String,
         val display: Display,
     ) {
-        /** Last action bar line, re-sent by the controller's bar timer. */
-        var barLine: Component? = null
-
         /** Cheats over the threshold at the last inference, for chat mode. */
         var lastFlagged: Set<String> = emptySet()
     }
@@ -80,13 +77,6 @@ class WatchService(private val plugin: DwAgentPlugin) {
     }
 
     private val byPlayer = HashMap<UUID, Watch>()
-
-    /**
-     * One action bar timer per controller. The client fades the action bar
-     * after a couple of seconds, so it must be repeated between predictions.
-     * A controller watching several players has them all on that one line.
-     */
-    private val barTasks = HashMap<String, BukkitTask>()
 
     fun isWatching(playerId: UUID): Boolean = playerId in byPlayer
 
@@ -127,15 +117,8 @@ class WatchService(private val plugin: DwAgentPlugin) {
         watch.subscribers[key] = subscriber
 
         // A late viewer starts with the newest state instead of an empty bar.
-        watch.lastReport?.let { report ->
-            if (subscriber.display == Display.ACTION_BAR) {
-                subscriber.barLine =
-                    PredictionView.liveLine(watch.playerName, report, plugin.threshold())
-            }
-        }
         if (subscriber.display == Display.ACTION_BAR) {
-            ensureBar(subscriber)
-            refreshBar(key)
+            watch.lastReport?.let { report -> showBar(subscriber, watch, report) }
         }
 
         sendWelcome(sender, player)
@@ -249,8 +232,6 @@ class WatchService(private val plugin: DwAgentPlugin) {
     /** Cancels every tick on shutdown; buffers are discarded. */
     fun stopAll() {
         byPlayer.values.toList().forEach { remove(it) }
-        barTasks.values.forEach { it.cancel() }
-        barTasks.clear()
         byPlayer.clear()
     }
 
@@ -316,9 +297,8 @@ class WatchService(private val plugin: DwAgentPlugin) {
                     Placeholder.unparsed("player", watch.playerName),
                 )
                 for (subscriber in watch.subscribers.values) {
-                    subscriber.barLine = null
                     if (subscriber.display == Display.ACTION_BAR) {
-                        refreshBar(subscriber.controllerKey)
+                        plugin.actionBar.clear(subscriber.controller, barOwner(watch))
                     }
                     notify(subscriber, idle)
                 }
@@ -361,9 +341,7 @@ class WatchService(private val plugin: DwAgentPlugin) {
                     // The bar is a live view, not an event log: it changes
                     // every interval and never touches chat.
                     if (subscriber.display == Display.ACTION_BAR) {
-                        subscriber.barLine =
-                            PredictionView.liveLine(watch.playerName, report, threshold)
-                        refreshBar(subscriber.controllerKey)
+                        showBar(subscriber, watch, report)
                         continue
                     }
 
@@ -397,7 +375,7 @@ class WatchService(private val plugin: DwAgentPlugin) {
     /** Drops one viewer; the watch itself ends with its last viewer. */
     private fun unsubscribe(watch: Watch, subscriber: Subscriber) {
         watch.subscribers.remove(subscriber.controllerKey)
-        releaseBar(subscriber)
+        clearBar(watch, subscriber)
         if (watch.subscribers.isEmpty()) remove(watch)
     }
 
@@ -407,8 +385,25 @@ class WatchService(private val plugin: DwAgentPlugin) {
 
         val subscribers = watch.subscribers.values.toList()
         watch.subscribers.clear()
-        subscribers.forEach { releaseBar(it) }
+        subscribers.forEach { clearBar(watch, it) }
     }
+
+    /** Writes this watch's line into the shared action bar. */
+    private fun showBar(subscriber: Subscriber, watch: Watch, report: InferenceReport) {
+        plugin.actionBar.set(
+            controller = subscriber.controller,
+            owner = barOwner(watch),
+            line = PredictionView.liveLine(watch.playerName, report, plugin.threshold()),
+            order = watch.playerName,
+        )
+    }
+
+    private fun clearBar(watch: Watch, subscriber: Subscriber) {
+        if (subscriber.display != Display.ACTION_BAR) return
+        plugin.actionBar.clear(subscriber.controller, barOwner(watch))
+    }
+
+    private fun barOwner(watch: Watch): String = "watch:${watch.playerId}"
 
     private fun display(sender: CommandSender): Display {
         // A console has no hotbar to write above; chat is its only channel.
@@ -417,73 +412,9 @@ class WatchService(private val plugin: DwAgentPlugin) {
         return if (configured.equals("chat", ignoreCase = true)) Display.CHAT else Display.ACTION_BAR
     }
 
-    /** Starts the controller's bar timer, if it does not run already. */
-    private fun ensureBar(subscriber: Subscriber) {
-        if (subscriber.controllerKey in barTasks) return
-        barTasks[subscriber.controllerKey] = plugin.server.scheduler.runTaskTimer(
-            plugin,
-            Runnable { refreshBar(subscriber.controllerKey) },
-            BAR_REFRESH_TICKS,
-            BAR_REFRESH_TICKS,
-        )
-    }
-
-    /**
-     * Re-sends the action bar of one controller, sorted by player name so the
-     * order does not jump between predictions. The controller may watch
-     * several players.
-     */
-    private fun refreshBar(controllerKey: String) {
-        val lines = byPlayer.values
-            .mapNotNull { watch ->
-                val subscriber = watch.subscribers[controllerKey] ?: return@mapNotNull null
-                if (subscriber.display != Display.ACTION_BAR) return@mapNotNull null
-                subscriber.barLine?.let { watch.playerName to it }
-            }
-            .sortedBy { it.first }
-        if (lines.isEmpty()) return
-
-        val controller = byPlayer.values
-            .firstNotNullOfOrNull { it.subscribers[controllerKey]?.controller }
-            ?: return
-        val player = controller as? Player ?: return
-        if (!player.isOnline) return
-
-        val text = Component.text()
-        var started = false
-        for ((_, line) in lines) {
-            if (started) text.append(separator())
-            text.append(line)
-            started = true
-        }
-        if (started) player.sendActionBar(text.build())
-    }
-
-    /** Drops one ended subscription from its controller's bar, or clears it. */
-    private fun releaseBar(subscriber: Subscriber) {
-        if (subscriber.display != Display.ACTION_BAR) return
-
-        val shared = byPlayer.values.any { watch ->
-            watch.subscribers[subscriber.controllerKey]?.display == Display.ACTION_BAR
-        }
-        if (shared) {
-            refreshBar(subscriber.controllerKey)
-            return
-        }
-
-        barTasks.remove(subscriber.controllerKey)?.cancel()
-        val player = subscriber.controller as? Player ?: return
-        if (player.isOnline) player.sendActionBar(Component.text(""))
-    }
-
     private fun notify(subscriber: Subscriber, component: Component) {
         val sender = subscriber.controller
         if (sender is Player && !sender.isOnline) return
         sender.sendMessage(component)
-    }
-
-    private companion object {
-        /** The client fades an action bar after about two seconds. */
-        const val BAR_REFRESH_TICKS = 30L
     }
 }

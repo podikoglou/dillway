@@ -104,9 +104,6 @@ class RecordingKit(
             RecordingStart.STARTED -> renderRecorder(player, KitState.RECORDING)
             // Another action started the session; the click adopts it.
             RecordingStart.ALREADY_RECORDING -> renderRecorder(player, KitState.RECORDING)
-            RecordingStart.ALREADY_WATCHED -> player.sendMini(
-                "<red>You are being watched. Stop the watch first.</red>",
-            )
         }
     }
 

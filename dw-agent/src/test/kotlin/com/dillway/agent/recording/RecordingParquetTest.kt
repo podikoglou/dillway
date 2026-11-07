@@ -141,6 +141,21 @@ class RecordingParquetTest {
     }
 
     @Test
+    fun `reads a snappy compressed recording`() {
+        val file = File(
+            requireNotNull(javaClass.getResource("/parquet/snappy.parquet")).toURI(),
+        )
+
+        val read = RecordingParquet.readRecording(file)
+
+        assertEquals(recording.id, read.id)
+        assertEquals("legit", read.label)
+        assertEquals(2, read.packets.size)
+        assertEquals(50.922640679476665, (read.packets[0].data as MoveData).x)
+        assertEquals(1674590919969L, (read.packets[1].data as AnimationData).timestamp)
+    }
+
+    @Test
     fun `recording survives a write and read round trip`() {
         val dir = Files.createTempDirectory("dillway-round-trip")
         val file = dir.resolve("${recording.id}.parquet").toFile()

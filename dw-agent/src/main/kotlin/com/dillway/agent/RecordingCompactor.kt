@@ -70,7 +70,11 @@ class RecordingCompactor(private val plugin: DwAgentPlugin) {
             .coerceAtLeast(1)
 
         val labels = storage.listCommonPrefixes(storage.recordingPrefix)
-            .filter { it.isNotEmpty() && it != Labels.UNLABELED }
+            .filter {
+                it.isNotEmpty() &&
+                    it != Labels.UNLABELED &&
+                    it != storage.modelsPrefix
+            }
             .sorted()
         if (labels.isEmpty()) return Report()
 
@@ -318,7 +322,7 @@ class RecordingCompactor(private val plugin: DwAgentPlugin) {
 
     private fun compactionDir(): File = File(plugin.dataFolder, COMPACTION_DIR)
 
-    private companion object {
+    internal companion object {
         const val SHARD_PREFIX = "compacted-"
         const val COMPACTION_DIR = ".compaction"
 

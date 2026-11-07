@@ -80,6 +80,37 @@ def test_load_sessions_splits_a_shard_on_the_recording_id(tmp_path: Path) -> Non
     assert [p["timestamp"] for p in sessions[0]["packets"]] == [100, 150, 200, 250]
 
 
+def test_load_sessions_keeps_payload_less_packets(tmp_path: Path) -> None:
+    """Legacy files carry packet kinds with no payload columns; keep them."""
+    rows = session_rows(100)
+    rows.append(
+        {
+            "id": 100,
+            "started": 100,
+            "player": "player-1",
+            "recording_type": "LEGIT",
+            "packet_type": "PacketPlayInFlying",
+            "timestamp": 101,
+            "x": None,
+            "y": None,
+            "z": None,
+            "yaw": None,
+            "pitch": None,
+            "f": None,
+            "hasPos": None,
+            "hasLook": None,
+        }
+    )
+    path = tmp_path / "legit" / "100.parquet"
+    write(path, rows)
+
+    packets = load_sessions(path)[0]["packets"]
+
+    assert packets[-1]["type"] == "PacketPlayInFlying"
+    assert packets[-1]["data"] == {}
+    assert packets[-1]["timestamp"] == 101
+
+
 def test_iter_recordings_yields_every_session_in_a_shard(tmp_path: Path) -> None:
     write(
         tmp_path / "legit" / "compacted-100-300.parquet",

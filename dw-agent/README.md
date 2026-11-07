@@ -50,15 +50,21 @@ console; `confirm` keeps its old meaning after the label.
 a recording that has already stopped. The buffer holds only the last window
 of play, so the numbers track the current behaviour.
 
+Watching is many-to-many: several admins can watch the same player, and one
+admin can watch several players. A watched player has one buffer and one
+prediction, shared by everyone watching them. `/dill watch stop [player]`
+drops one player or every player the sender watches; the watch itself ends
+only when its last viewer leaves.
+
 The live state is written above the hotbar, where it overwrites itself, so a
 watch stays silent in chat. The full report is available on demand and is
 printed when the watch stops. Consoles have no action bar, so they get the
 full report when a verdict changes; `watch.display` in the config selects
 that chat-only mode for players too.
 
-A watch writes nothing to disk and ends when the player leaves, on
-`/dill watch stop`, or at shutdown. A player cannot be recorded and watched
-at the same time: stop the other mode first.
+A watch writes nothing to disk and ends when the player leaves, when its
+last viewer stops it, or at shutdown. A player cannot be recorded and
+watched at the same time: stop the other mode first.
 
 ## Predictions
 

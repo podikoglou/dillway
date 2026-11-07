@@ -36,14 +36,6 @@ class DillCommand(
                 return
             }
 
-            RecordingStart.ALREADY_WATCHED -> {
-                sender.sendMini(
-                    "<red><player> is being watched. Stop the watch first.</red>",
-                    Placeholder.unparsed("player", target.name),
-                )
-                return
-            }
-
             RecordingStart.STARTED -> Unit
         }
 

@@ -134,6 +134,8 @@ object RecordingParquet {
                                 .setBoolean("hasLook", data.hasLook)
                             is AnimationData -> row.setLong("animation_timestamp", data.timestamp)
                             is HeldItemData -> row.setInt("itemInHandIndex", data.itemInHandIndex)
+                            // A payload-less packet leaves every payload column null.
+                            NoPayload -> {}
                         }
 
                         val c = packet.context
@@ -198,8 +200,10 @@ object RecordingParquet {
      * Reads a recording written by [writeRecording].
      *
      * The flat schema is self-describing, so the payload kind comes from which
-     * payload column is non-null, not from a hard-coded packet-type list. An
-     * empty file keeps its id and start time from the file name.
+     * payload column is non-null, not from a hard-coded packet-type list. A row
+     * with no payload columns is a legacy packet kind the plugin does not
+     * model; it keeps its type, timestamp, and context. An empty file keeps its
+     * id and start time from the file name.
      */
     fun readRecording(file: File): Recording {
         ParquetFileReader.open(InputFile.of(file.toPath())).use { reader ->
@@ -256,7 +260,7 @@ object RecordingParquet {
             !rows.isNull("itemInHandIndex") ->
                 HeldItemData(itemInHandIndex = rows.getInt("itemInHandIndex"))
 
-            else -> error("recording row has no payload")
+            else -> NoPayload
         }
 
         return RecordedPacket(

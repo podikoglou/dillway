@@ -106,6 +106,91 @@ class RecordingParquetTest {
     }
 
     @Test
+    fun `several recordings share one file with their own headers`() {
+        val dir = Files.createTempDirectory("dillway-shard")
+        val file = dir.resolve("compacted-1-2.parquet").toFile()
+        val second = recording.copy(
+            id = recording.id + 1,
+            started = recording.id + 1,
+            player = "11111111-2222-3333-4444-555555555555",
+            label = "speed",
+            packets = recording.packets.take(1),
+        )
+
+        RecordingParquet.writeRecordings(file, listOf(recording, second))
+
+        ParquetFileReader.open(InputFile.of(file.toPath())).use { reader ->
+            reader.rowReader().use { rows ->
+                // The first recording keeps its header for all of its rows.
+                repeat(3) {
+                    assertTrue(rows.hasNext())
+                    rows.next()
+                    assertHeader(rows)
+                }
+
+                // The next row starts the second recording.
+                assertTrue(rows.hasNext())
+                rows.next()
+                assertEquals(recording.id + 1, rows.getLong("id"))
+                assertEquals(recording.id + 1, rows.getLong("started"))
+                assertEquals("11111111-2222-3333-4444-555555555555", rows.getString("player"))
+                assertEquals("SPEED", rows.getString("recording_type"))
+                assertEquals(false, rows.hasNext())
+            }
+        }
+    }
+
+    @Test
+    fun `reads a snappy compressed recording`() {
+        val file = File(
+            requireNotNull(javaClass.getResource("/parquet/snappy.parquet")).toURI(),
+        )
+
+        val read = RecordingParquet.readRecording(file)
+
+        assertEquals(recording.id, read.id)
+        assertEquals("legit", read.label)
+        assertEquals(2, read.packets.size)
+        assertEquals(50.922640679476665, (read.packets[0].data as MoveData).x)
+        assertEquals(1674590919969L, (read.packets[1].data as AnimationData).timestamp)
+    }
+
+    @Test
+    fun `reads a legacy recording with payload-less packet kinds`() {
+        val file = File(
+            requireNotNull(javaClass.getResource("/parquet/legacy.parquet")).toURI(),
+        )
+
+        val read = RecordingParquet.readRecording(file)
+
+        assertEquals(1674858332110L, read.id)
+        assertEquals("legit", read.label)
+        assertEquals(22, read.packets.size)
+        // Flying and block place have no modelled payload; they keep their
+        // type, timestamp, and context instead of failing the whole file.
+        assertEquals(
+            setOf("PacketPlayInFlying", "PacketPlayInBlockPlace"),
+            read.packets.filter { it.data is NoPayload }.map { it.type }.toSet(),
+        )
+        val move = read.packets.first { it.type == "PacketPlayInPosition" }
+        assertEquals(17.700470117205075, (move.data as MoveData).x)
+    }
+
+    @Test
+    fun `legacy recording survives a compaction round trip`() {
+        val file = File(
+            requireNotNull(javaClass.getResource("/parquet/legacy.parquet")).toURI(),
+        )
+        val original = RecordingParquet.readRecording(file)
+        val dir = Files.createTempDirectory("dillway-legacy-round-trip")
+        val shard = dir.resolve("compacted-${original.id}-${original.id}.parquet").toFile()
+
+        RecordingParquet.writeRecordings(shard, listOf(original))
+
+        assertEquals(original, RecordingParquet.readRecording(shard))
+    }
+
+    @Test
     fun `recording survives a write and read round trip`() {
         val dir = Files.createTempDirectory("dillway-round-trip")
         val file = dir.resolve("${recording.id}.parquet").toFile()

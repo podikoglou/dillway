@@ -45,6 +45,9 @@ class S3Storage(private val plugin: DwAgentPlugin) {
 
     val modelsPrefix: String get() = modelsKeyPrefix
 
+    /** Prefix that holds the recording label directories, no trailing slash. */
+    val recordingPrefix: String get() = keyPrefix
+
     /** Reads config and opens the client. True when remote storage will run. */
     fun start(): Boolean {
         val config = plugin.config
@@ -151,6 +154,66 @@ class S3Storage(private val plugin: DwAgentPlugin) {
         } catch (e: S3Exception) {
             plugin.metrics.uploadFailed()
             plugin.logger.severe("Upload of $key failed, keeping local copy ${file.name}: ${e.message}")
+        }
+    }
+
+    /**
+     * Uploads [file] to an explicit [key] and keeps the local file. Returns
+     * false on failure. Compaction uses this for shard objects, which must not
+     * be deleted after upload the way a labeled recording is.
+     */
+    fun putFile(key: String, file: File): Boolean {
+        val s3 = source ?: return false
+        val bytes = file.length()
+        return try {
+            s3.putObject(
+                PutObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(key)
+                    .contentType("application/octet-stream")
+                    .build(),
+                RequestBody.fromFile(file),
+            )
+            plugin.metrics.uploadSucceeded(bytes)
+            true
+        } catch (e: IOException) {
+            plugin.metrics.uploadFailed()
+            plugin.logger.severe("Upload of $key failed: ${e.message}")
+            false
+        } catch (e: S3Exception) {
+            plugin.metrics.uploadFailed()
+            plugin.logger.severe("Upload of $key failed: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Every object under [prefix], with its size, following continuation
+     * tokens. Returns null when listing fails: a caller must not mistake a
+     * failed listing for an empty prefix and then treat the data as compacted.
+     */
+    fun listObjects(prefix: String): List<StoredObject>? {
+        val s3 = source ?: return null
+        val normalized = prefix.trim('/').let { if (it.isEmpty()) "" else "$it/" }
+        val objects = mutableListOf<StoredObject>()
+        var token: String? = null
+
+        return try {
+            while (true) {
+                val request = ListObjectsV2Request.builder()
+                    .bucket(bucket)
+                    .prefix(normalized)
+                    .continuationToken(token)
+                    .build()
+                val response = s3.listObjectsV2(request)
+                response.contents().forEach { objects += StoredObject(it.key(), it.size()) }
+                if (response.isTruncated != true) break
+                token = response.nextContinuationToken() ?: break
+            }
+            objects
+        } catch (e: S3Exception) {
+            plugin.logger.warning("Could not list s3://$bucket/$normalized: ${e.message}")
+            null
         }
     }
 
@@ -286,3 +349,6 @@ class S3Storage(private val plugin: DwAgentPlugin) {
 
     private fun value(path: String): String = plugin.config.getString(path)?.trim().orEmpty()
 }
+
+/** One listed bucket object. */
+data class StoredObject(val key: String, val size: Long)

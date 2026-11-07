@@ -5,11 +5,17 @@ Specialists are independent.
 
 ## 1. Record
 
-Use the plugin (`dw-agent/README.md`). Keep whole sessions, one file per recording:
+Use the plugin (`dw-agent/README.md`). Keep whole sessions:
 
 ```
-<dataset-root>/<label>/<started>.parquet
+<dataset-root>/<label>/<started>.parquet              source recording
+<dataset-root>/<label>/compacted-<first>-<last>.parquet   merged shard
 ```
+
+`/dill compact` merges many source recordings into shards to cut the number of
+objects training has to fetch. A shard holds several whole sessions; the
+trainer splits them apart again, and a recording that a leftover source and a
+shard both hold counts once. Both layouts are equivalent for training.
 
 `legit` is the shared negative class; each cheat has its own directory. A file
 gets one label, so split a session that mixes legit and cheat periods. The

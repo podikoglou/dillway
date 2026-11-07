@@ -172,6 +172,23 @@ class DillCommand(
         flow.discard(sender, id)
     }
 
+    /** Merges the small recording objects into shards; one run at a time. */
+    @Command("dill compact")
+    @Permission("dillway.admin")
+    fun compact(@Sender sender: CommandSender) {
+        if (!plugin.storage.enabled) {
+            sender.sendMini("<red>Remote storage is disabled in config.yml.</red>")
+            return
+        }
+        if (!plugin.compactor.start(sender)) {
+            sender.sendMini("<gray>Compaction is already running.</gray>")
+            return
+        }
+        sender.sendMini(
+            "<gray>Compacting recordings in the background. See the server log.</gray>",
+        )
+    }
+
     /** Prints the in-memory counters: capture, inference, uploads and refreshes. */
     @Command("dill metrics")
     @Permission("dillway.admin")

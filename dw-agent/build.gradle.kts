@@ -20,6 +20,9 @@ dependencies {
     // ZSTD codec; without it Hardwood falls back to UNCOMPRESSED pages.
     implementation("dev.hardwood:hardwood-core:1.1.0.Beta3")
     implementation("com.github.luben:zstd-jni:1.5.7-3")
+    // Read SNAPPY pages too. The legacy JSON converter used pyarrow's default
+    // codec, so its older files are SNAPPY-compressed.
+    implementation("org.xerial.snappy:snappy-java:1.1.10.8")
 
     // Uploads to the S3-compatible bucket (Cloudflare R2). Hardwood's s3 module
     // has no write API in any release, so the AWS SDK v2 carries this; the

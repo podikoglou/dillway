@@ -101,62 +101,75 @@ object RecordingParquet {
      * [OutputFile] is the destination abstraction; callers wanting a plain
      * stream use the [OutputStream] overload.
      */
-    fun writeRecording(destination: OutputFile, recording: Recording) {
+    fun writeRecording(destination: OutputFile, recording: Recording) =
+        writeRecordings(destination, listOf(recording))
+
+    /**
+     * Writes several recordings into one Parquet sink, keeping the same flat
+     * row-per-packet layout. Compaction uses this to turn many session files
+     * into one shard; the repeated header columns tell a reader where one
+     * recording ends and the next begins, so no extra marker is needed.
+     */
+    fun writeRecordings(destination: OutputFile, recordings: Iterable<Recording>) {
         ParquetFileWriter.create(destination, schema).use { writer ->
             val rows = writer.rowWriter()
-            for (packet in recording.packets) {
-                rows.writeRow { row ->
-                    row.setLong("id", recording.id)
-                        .setLong("started", recording.started)
-                        .setString("player", recording.player)
-                        .setString("recording_type", recording.label.uppercase(Locale.ROOT))
-                        .setString("packet_type", packet.type)
-                        .setLong("timestamp", packet.timestamp)
+            for (recording in recordings) {
+                for (packet in recording.packets) {
+                    rows.writeRow { row ->
+                        row.setLong("id", recording.id)
+                            .setLong("started", recording.started)
+                            .setString("player", recording.player)
+                            .setString("recording_type", recording.label.uppercase(Locale.ROOT))
+                            .setString("packet_type", packet.type)
+                            .setLong("timestamp", packet.timestamp)
 
-                    when (val data = packet.data) {
-                        is MoveData -> row.setDouble("x", data.x)
-                            .setDouble("y", data.y)
-                            .setDouble("z", data.z)
-                            .setFloat("yaw", data.yaw)
-                            .setFloat("pitch", data.pitch)
-                            .setBoolean("f", data.onGround)
-                            .setBoolean("hasPos", data.hasPos)
-                            .setBoolean("hasLook", data.hasLook)
-                        is AnimationData -> row.setLong("animation_timestamp", data.timestamp)
-                        is HeldItemData -> row.setInt("itemInHandIndex", data.itemInHandIndex)
+                        when (val data = packet.data) {
+                            is MoveData -> row.setDouble("x", data.x)
+                                .setDouble("y", data.y)
+                                .setDouble("z", data.z)
+                                .setFloat("yaw", data.yaw)
+                                .setFloat("pitch", data.pitch)
+                                .setBoolean("f", data.onGround)
+                                .setBoolean("hasPos", data.hasPos)
+                                .setBoolean("hasLook", data.hasLook)
+                            is AnimationData -> row.setLong("animation_timestamp", data.timestamp)
+                            is HeldItemData -> row.setInt("itemInHandIndex", data.itemInHandIndex)
+                            // A payload-less packet leaves every payload column null.
+                            NoPayload -> {}
+                        }
+
+                        val c = packet.context
+                        row.setFloat("fly_speed", c.flySpeed)
+                            .setDouble("velocity_z", c.velocityZ)
+                            .setDouble("location_x", c.locationX)
+                            .setDouble("location_y", c.locationY)
+                            .setDouble("location_direction_y", c.locationDirectionY)
+                            .setDouble("location_direction_x", c.locationDirectionX)
+                            .setDouble("velocity_x", c.velocityX)
+                            .setDouble("velocity_y", c.velocityY)
+                            .setFloat("saturation", c.saturation)
+                            .setDouble("location_direction_z", c.locationDirectionZ)
+                            .setDouble("location_z", c.locationZ)
+                            .setInt("food_level", c.foodLevel)
+                            .setFloat("eye_location_yaw", c.eyeLocationYaw)
+                            .setFloat("walk_speed", c.walkSpeed)
+                            .setDouble("eye_height", c.eyeHeight)
+                            .setBoolean("allow_flight", c.allowFlight)
+                            .setFloat("exhaustion", c.exhaustion)
+                            .setDouble("health", c.health)
+                            .setFloat("eye_location_pitch", c.eyeLocationPitch)
+                            .setFloat("location_pitch", c.locationPitch)
+                            .setFloat("fall_distance", c.fallDistance)
+                            .setFloat("location_yaw", c.locationYaw)
+                            .setDouble("health_scale", c.healthScale)
+                            .setBoolean("sprinting", c.sprinting)
+                            .setDouble("eye_location_y", c.eyeLocationY)
+                            .setDouble("eye_location_x", c.eyeLocationX)
+                            .setBoolean("flying", c.flying)
+                            .setDouble("eye_location_z", c.eyeLocationZ)
+                            .setBoolean("sneaking", c.sneaking)
+                            .setBoolean("on_ground", c.onGround)
                     }
-
-                    val c = packet.context
-                    row.setFloat("fly_speed", c.flySpeed)
-                        .setDouble("velocity_z", c.velocityZ)
-                        .setDouble("location_x", c.locationX)
-                        .setDouble("location_y", c.locationY)
-                        .setDouble("location_direction_y", c.locationDirectionY)
-                        .setDouble("location_direction_x", c.locationDirectionX)
-                        .setDouble("velocity_x", c.velocityX)
-                        .setDouble("velocity_y", c.velocityY)
-                        .setFloat("saturation", c.saturation)
-                        .setDouble("location_direction_z", c.locationDirectionZ)
-                        .setDouble("location_z", c.locationZ)
-                        .setInt("food_level", c.foodLevel)
-                        .setFloat("eye_location_yaw", c.eyeLocationYaw)
-                        .setFloat("walk_speed", c.walkSpeed)
-                        .setDouble("eye_height", c.eyeHeight)
-                        .setBoolean("allow_flight", c.allowFlight)
-                        .setFloat("exhaustion", c.exhaustion)
-                        .setDouble("health", c.health)
-                        .setFloat("eye_location_pitch", c.eyeLocationPitch)
-                        .setFloat("location_pitch", c.locationPitch)
-                        .setFloat("fall_distance", c.fallDistance)
-                        .setFloat("location_yaw", c.locationYaw)
-                        .setDouble("health_scale", c.healthScale)
-                        .setBoolean("sprinting", c.sprinting)
-                        .setDouble("eye_location_y", c.eyeLocationY)
-                        .setDouble("eye_location_x", c.eyeLocationX)
-                        .setBoolean("flying", c.flying)
-                        .setDouble("eye_location_z", c.eyeLocationZ)
-                        .setBoolean("sneaking", c.sneaking)
-                        .setBoolean("on_ground", c.onGround)
                 }
             }
         }
@@ -169,6 +182,10 @@ object RecordingParquet {
      */
     fun writeRecording(file: File, recording: Recording) =
         writeRecording(OutputFile.of(file.toPath()), recording)
+
+    /** Writes several recordings into [file] as one shard. */
+    fun writeRecordings(file: File, recordings: Iterable<Recording>) =
+        writeRecordings(OutputFile.of(file.toPath()), recordings)
 
     /**
      * Writes one recording into [output]. The stream is flushed, not closed —
@@ -183,8 +200,10 @@ object RecordingParquet {
      * Reads a recording written by [writeRecording].
      *
      * The flat schema is self-describing, so the payload kind comes from which
-     * payload column is non-null, not from a hard-coded packet-type list. An
-     * empty file keeps its id and start time from the file name.
+     * payload column is non-null, not from a hard-coded packet-type list. A row
+     * with no payload columns is a legacy packet kind the plugin does not
+     * model; it keeps its type, timestamp, and context. An empty file keeps its
+     * id and start time from the file name.
      */
     fun readRecording(file: File): Recording {
         ParquetFileReader.open(InputFile.of(file.toPath())).use { reader ->
@@ -241,7 +260,7 @@ object RecordingParquet {
             !rows.isNull("itemInHandIndex") ->
                 HeldItemData(itemInHandIndex = rows.getInt("itemInHandIndex"))
 
-            else -> error("recording row has no payload")
+            else -> NoPayload
         }
 
         return RecordedPacket(

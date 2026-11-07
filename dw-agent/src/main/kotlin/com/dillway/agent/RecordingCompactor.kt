@@ -4,6 +4,7 @@ import com.dillway.agent.recording.Recording
 import com.dillway.agent.recording.RecordingParquet
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder
 import org.bukkit.command.CommandSender
+import org.bukkit.entity.Player
 import java.io.File
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
@@ -41,7 +42,7 @@ class RecordingCompactor(private val plugin: DwAgentPlugin) {
 
         plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
             val report = try {
-                run()
+                run(sender)
             } catch (e: Exception) {
                 plugin.logger.severe(
                     "Compaction failed: ${e.message ?: e.javaClass.simpleName}",
@@ -60,7 +61,7 @@ class RecordingCompactor(private val plugin: DwAgentPlugin) {
         cancelled = true
     }
 
-    private fun run(): Report {
+    private fun run(sender: CommandSender): Report {
         val storage = plugin.storage
         val perShard = plugin.config
             .getInt("s3.compaction.recordings-per-shard", 50)
@@ -69,14 +70,15 @@ class RecordingCompactor(private val plugin: DwAgentPlugin) {
             .getInt("s3.compaction.download-concurrency", 4)
             .coerceAtLeast(1)
 
-        val labels = storage.listCommonPrefixes(storage.recordingPrefix)
-            .filter {
-                it.isNotEmpty() &&
-                    it != Labels.UNLABELED &&
-                    it != storage.modelsPrefix
-            }
-            .sorted()
-        if (labels.isEmpty()) return Report()
+        // The whole run works from one listing, taken before any download.
+        val (plans, failed) = plan()
+        val total = plans.sumOf { it.sources.size }
+        if (plans.isEmpty()) return Report(failed = failed)
+
+        val breakdown = plans.joinToString(", ") { "${it.label} ${it.sources.size}" }
+        plugin.logger.info(
+            "[compaction] $total recordings across ${plans.size} labels ($breakdown)",
+        )
 
         cleanup()
         val downloads = Executors.newFixedThreadPool(concurrency) { task ->
@@ -84,38 +86,69 @@ class RecordingCompactor(private val plugin: DwAgentPlugin) {
         }
 
         var shards = 0
-        var recordings = 0
-        val failed = mutableListOf<String>()
+        var done = 0
+        showProgress(sender, done, total, null)
         try {
-            for (label in labels) {
+            for (plan in plans) {
                 if (cancelled || !plugin.isEnabled) break
-                val result = compactLabel(label, perShard, downloads)
+                val result = compactLabel(plan, perShard, downloads) { labelDone ->
+                    showProgress(sender, done + labelDone, total, plan.label)
+                }
                 shards += result.shards
-                recordings += result.recordings
-                if (result.error) failed += label
+                done += result.recordings
+                if (result.error) failed += plan.label
+                showProgress(sender, done, total, plan.label)
             }
         } finally {
             downloads.shutdownNow()
             cleanup()
+            hideProgress(sender)
         }
-        return Report(shards, recordings, failed)
+        return Report(shards, done, failed)
+    }
+
+    /** All source objects, per label, listed before the first download. */
+    private fun plan(): Pair<List<LabelPlan>, MutableList<String>> {
+        val storage = plugin.storage
+        val failed = mutableListOf<String>()
+        val labels = storage.listCommonPrefixes(storage.recordingPrefix)
+            .filter {
+                it.isNotEmpty() &&
+                    it != Labels.UNLABELED &&
+                    it != storage.modelsPrefix
+            }
+            .sorted()
+
+        val plans = labels.mapNotNull { label ->
+            val objects = storage.listObjects(storage.recordingKey(label, ""))
+            if (objects == null) {
+                plugin.logger.warning("[compaction] [$label] could not list objects")
+                failed += label
+                return@mapNotNull null
+            }
+
+            val sources = objects
+                .filter { isSourceObject(it.key) }
+                .sortedBy { it.key }
+            if (sources.isEmpty()) {
+                plugin.logger.info("[compaction] [$label] nothing to compact")
+                return@mapNotNull null
+            }
+            LabelPlan(label, sources)
+        }
+        return plans to failed
     }
 
     private fun compactLabel(
-        label: String,
+        plan: LabelPlan,
         perShard: Int,
         downloads: ExecutorService,
+        onProgress: (Int) -> Unit,
     ): LabelResult {
         val storage = plugin.storage
-        val objects = storage.listObjects(storage.recordingKey(label, ""))
-        if (objects == null) {
-            plugin.logger.warning("[compaction] [$label] could not list objects")
-            return LabelResult(error = true)
-        }
+        val label = plan.label
+        val sources = plan.sources
 
-        val sources = objects
-            .filter { isSourceObject(it.key) }
-            .sortedBy { it.key }
         if (sources.isEmpty()) {
             plugin.logger.info("[compaction] [$label] nothing to compact")
             return LabelResult()
@@ -179,6 +212,7 @@ class RecordingCompactor(private val plugin: DwAgentPlugin) {
                 merged.forEach { storage.delete(it.key) }
                 shards += 1
                 compacted += merged.size
+                onProgress(compacted)
                 plugin.logger.info(
                     "[compaction] [$label] shard ${index + 1}/$batches: " +
                         "${merged.size} recordings -> $key",
@@ -291,6 +325,37 @@ class RecordingCompactor(private val plugin: DwAgentPlugin) {
         return candidate to plugin.storage.recordingKey(label, candidate)
     }
 
+    /** `0/286 · legit` above the hotbar, on the sender's shared action bar. */
+    private fun showProgress(sender: CommandSender, done: Int, total: Int, label: String?) {
+        if (sender !is Player) return
+        val line = if (label == null) {
+            mini(
+                "<aqua>Compacting</aqua> <gray><done>/<total></gray>",
+                Placeholder.unparsed("done", done.toString()),
+                Placeholder.unparsed("total", total.toString()),
+            )
+        } else {
+            mini(
+                "<aqua>Compacting</aqua> <gray><done>/<total></gray>" +
+                    " <dark_gray>·</dark_gray> <yellow><label></yellow>",
+                Placeholder.unparsed("done", done.toString()),
+                Placeholder.unparsed("total", total.toString()),
+                Placeholder.unparsed("label", label),
+            )
+        }
+        onMain { plugin.actionBar.set(sender, BAR_OWNER, line) }
+    }
+
+    private fun hideProgress(sender: CommandSender) {
+        if (sender !is Player) return
+        onMain { plugin.actionBar.clear(sender, BAR_OWNER) }
+    }
+
+    private fun onMain(action: () -> Unit) {
+        if (!plugin.isEnabled) return
+        plugin.server.scheduler.runTask(plugin, Runnable { action() })
+    }
+
     private fun announce(sender: CommandSender, report: Report) {
         if (!plugin.isEnabled) return
         plugin.server.scheduler.runTask(plugin, Runnable {
@@ -329,12 +394,15 @@ class RecordingCompactor(private val plugin: DwAgentPlugin) {
     internal companion object {
         const val SHARD_PREFIX = "compacted-"
         const val COMPACTION_DIR = ".compaction"
+        const val BAR_OWNER = "compaction"
 
         fun fileName(key: String): String = key.substringAfterLast('/')
 
         fun isSourceObject(key: String): Boolean =
             key.endsWith(".parquet") && !fileName(key).startsWith(SHARD_PREFIX)
     }
+
+    private data class LabelPlan(val label: String, val sources: List<StoredObject>)
 
     private data class Report(
         val shards: Int = 0,

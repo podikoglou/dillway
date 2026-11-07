@@ -48,6 +48,7 @@ class DwAgentPlugin : JavaPlugin() {
     val recordings = RecordingStore(this)
     val flow = RecordingFlow(this)
     val kit = RecordingKit(this, listener, flow)
+    val compactor = RecordingCompactor(this)
 
     /** Cheats the admin can label, from config; models add themselves. */
     val cheatNames: List<String>
@@ -109,6 +110,7 @@ class DwAgentPlugin : JavaPlugin() {
         // labeled during shutdown and are never uploaded.
         watches.stopAll()
         listener.stopAll()
+        compactor.stop()
         models.close()
         storage.stop()
     }

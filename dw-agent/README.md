@@ -25,11 +25,13 @@ models and config carry over.
 5. Consoles get command names instead of clickable buttons; everything
    works by typing the commands.
 6. `/dill compact` merges the uploaded recordings of one label directory into
-   shards, one label at a time, in the background. Only one run exists at a
-   time, and it never starts on its own. A source object is deleted only after
-   its shard is uploaded, so an interrupted run leaves usable data behind.
-   Compact only labels that are stable: a later relabel cannot reach a
-   recording that already sits inside a shard.
+   shards, one label at a time, in the background. It lists every recording
+   before it starts and shows progress above the hotbar, next to any live
+   watch. Only one run exists at a time, and it never starts on its own. A
+   source object is deleted only after its shard is uploaded, so an
+   interrupted run leaves usable data behind. Compact only labels that are
+   stable: a later relabel cannot reach a recording that already sits inside
+   a shard.
 
 All admin commands require `dillway.admin` (default `op`). The node keeps
 its old name so existing permission setups work unchanged. Run

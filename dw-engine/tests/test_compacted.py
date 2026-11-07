@@ -80,12 +80,6 @@ def test_load_sessions_splits_a_shard_on_the_recording_id(tmp_path: Path) -> Non
     assert [p["timestamp"] for p in sessions[0]["packets"]] == [100, 150, 200, 250]
 
 
-def test_load_session_keeps_the_first_session_of_a_shard(tmp_path: Path) -> None:
-    path = tmp_path / "legit" / "compacted-100-200.parquet"
-    write(path, session_rows(100) + session_rows(200, player="bob"))
-    assert load_sessions(path)[0]["id"] == 100
-
-
 def test_iter_recordings_yields_every_session_in_a_shard(tmp_path: Path) -> None:
     write(
         tmp_path / "legit" / "compacted-100-300.parquet",

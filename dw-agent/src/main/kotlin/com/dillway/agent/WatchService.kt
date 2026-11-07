@@ -17,12 +17,11 @@ import kotlin.math.roundToLong
  * Live predictions for watched players.
  *
  * Packets arrive through `DillListener`, the same pipeline that feeds
- * recordings. A player cannot be recorded and watched at the same time, so
- * the two modes never share a player. A repeating task takes a rolling tail
- * of the buffer — long enough for the longest loaded window — and runs the
- * specialists off the main thread. A watch is ephemeral: it writes nothing
- * to disk and ends when the player leaves, when the last viewer stops, or at
- * shutdown.
+ * recordings. Recording and watching are independent, so a player can do both
+ * at once. A repeating task takes a rolling tail of the buffer — long enough
+ * for the longest loaded window — and runs the specialists off the main
+ * thread. A watch is ephemeral: it writes nothing to disk and ends when the
+ * player leaves, when the last viewer stops, or at shutdown.
  *
  * A watch belongs to the watched player, not to the admin. Any number of
  * admins can watch the same player, and one admin can watch several players;
@@ -105,21 +104,12 @@ class WatchService(private val plugin: DwAgentPlugin) {
         val existing = byPlayer[player.uniqueId]
 
         if (existing != null && key in existing.subscribers) {
-            sender.sendMini(
-                "<red>You are already watching <player>.</red>",
-                Placeholder.unparsed("player", player.name),
-            )
+            // Idempotent: asking again just shows the watch that is already there.
+            sendWelcome(sender, player)
             return
         }
 
         if (existing == null) {
-            if (plugin.isRecording(player)) {
-                sender.sendMini(
-                    "<red><player> is being recorded. Stop the recording first.</red>",
-                    Placeholder.unparsed("player", player.name),
-                )
-                return
-            }
             if (plugin.models.summary().isEmpty()) {
                 sender.sendMini(
                     "<red>No models are loaded. Run <white>/dill models reload</white>.</red>",

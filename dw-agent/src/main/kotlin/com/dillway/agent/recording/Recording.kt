@@ -54,3 +54,11 @@ data class AnimationData(
 data class HeldItemData(
     val itemInHandIndex: Int,
 ) : PacketData
+
+/**
+ * A packet kind with no modelled payload: keep-alive, flying, block place, and
+ * other legacy packets. The flat file stores such a row with every payload
+ * column null, and the engine reads it as a context-only packet. Compaction
+ * must preserve these rows, so they get a variant instead of an error.
+ */
+data object NoPayload : PacketData

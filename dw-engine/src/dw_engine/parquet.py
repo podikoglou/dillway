@@ -121,13 +121,3 @@ def load_sessions(path: Path) -> list[dict]:
             }
         )
     return sessions
-
-
-def load_session(path: Path) -> dict | None:
-    """Read one recording parquet and return its first session, or None.
-
-    Kept for callers that work with a single source file. Multi-session
-    callers must use load_sessions().
-    """
-    sessions = load_sessions(path)
-    return sessions[0] if sessions else None

@@ -41,6 +41,7 @@ class DwAgentPlugin : JavaPlugin() {
 
     // Eager fields: set before onEnable, so onDisable is always safe.
     val metrics = Metrics()
+    val actionBar = ActionBar(this)
     val watches = WatchService(this)
     private val listener = DillListener(this, watches)
     val storage = S3Storage(this)
@@ -111,6 +112,7 @@ class DwAgentPlugin : JavaPlugin() {
         watches.stopAll()
         listener.stopAll()
         compactor.stop()
+        actionBar.stopAll()
         models.close()
         storage.stop()
     }

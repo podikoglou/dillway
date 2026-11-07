@@ -24,5 +24,4 @@ data class StoppedRecording(
 enum class RecordingStart {
     STARTED,
     ALREADY_RECORDING,
-    ALREADY_WATCHED,
 }

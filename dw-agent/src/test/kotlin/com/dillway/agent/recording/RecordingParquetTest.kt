@@ -156,6 +156,41 @@ class RecordingParquetTest {
     }
 
     @Test
+    fun `reads a legacy recording with payload-less packet kinds`() {
+        val file = File(
+            requireNotNull(javaClass.getResource("/parquet/legacy.parquet")).toURI(),
+        )
+
+        val read = RecordingParquet.readRecording(file)
+
+        assertEquals(1674858332110L, read.id)
+        assertEquals("legit", read.label)
+        assertEquals(22, read.packets.size)
+        // Flying and block place have no modelled payload; they keep their
+        // type, timestamp, and context instead of failing the whole file.
+        assertEquals(
+            setOf("PacketPlayInFlying", "PacketPlayInBlockPlace"),
+            read.packets.filter { it.data is NoPayload }.map { it.type }.toSet(),
+        )
+        val move = read.packets.first { it.type == "PacketPlayInPosition" }
+        assertEquals(17.700470117205075, (move.data as MoveData).x)
+    }
+
+    @Test
+    fun `legacy recording survives a compaction round trip`() {
+        val file = File(
+            requireNotNull(javaClass.getResource("/parquet/legacy.parquet")).toURI(),
+        )
+        val original = RecordingParquet.readRecording(file)
+        val dir = Files.createTempDirectory("dillway-legacy-round-trip")
+        val shard = dir.resolve("compacted-${original.id}-${original.id}.parquet").toFile()
+
+        RecordingParquet.writeRecordings(shard, listOf(original))
+
+        assertEquals(original, RecordingParquet.readRecording(shard))
+    }
+
+    @Test
     fun `recording survives a write and read round trip`() {
         val dir = Files.createTempDirectory("dillway-round-trip")
         val file = dir.resolve("${recording.id}.parquet").toFile()

@@ -29,7 +29,6 @@ class DillListener(
 
     fun startRecording(player: Player): RecordingStart {
         if (sessions.containsKey(player.uniqueId)) return RecordingStart.ALREADY_RECORDING
-        if (watches.isWatching(player.uniqueId)) return RecordingStart.ALREADY_WATCHED
         sessions[player.uniqueId] = RecordingSession(player.uniqueId)
         plugin.metrics.recordingStarted()
         return RecordingStart.STARTED
